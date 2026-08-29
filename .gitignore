@@ -1,0 +1,18 @@
+# Local learning notes and progress (not committed)
+.local/
+
+# Python virtual environment
+.venv/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+
+# Local secrets and environment overrides
+.env
+.env.*
+!.env.example
+
+# Local SQLite database
+data/*.db
+data/*.db-*
