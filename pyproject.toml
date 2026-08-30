@@ -1,0 +1,16 @@
+[project]
+name = "patient-follow-up-system"
+version = "0.1.0"
+description = "De-identified patient follow-up system MVP"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.14",
+    "fastapi>=0.115",
+    "openai>=1.0",
+    "python-dotenv>=1.0",
+    "sqlalchemy>=2.0",
+    "uvicorn[standard]>=0.30",
+]
+
+[dependency-groups]
+dev = []
