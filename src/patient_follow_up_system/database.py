@@ -2,7 +2,8 @@ import os
 from collections.abc import Generator
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
@@ -23,6 +24,15 @@ connect_args = (
     if DATABASE_URL.startswith("sqlite")
     else {}
 )
+
+
+@event.listens_for(Engine, "connect")
+def enable_sqlite_foreign_keys(dbapi_connection, connection_record) -> None:
+    if not DATABASE_URL.startswith("sqlite"):
+        return
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 engine = create_engine(
     DATABASE_URL,
