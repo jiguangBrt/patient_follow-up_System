@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>患者随访邀请</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="patient-page">
+  <header class="patient-header">
+    <h1>患者随访</h1>
+    <p>请在医护人员协助下完成首次绑定</p>
+  </header>
+  <main class="mobile">
+    <section class="card patient-card">
+      <p class="step-label">当前步骤</p>
+      <h2 id="title">正在检查邀请</h2>
+      <div id="status" class="status" role="status" aria-live="polite">请稍候…</div>
+
+      <form id="bindForm" class="hidden patient-form">
+        <p class="plain-help">输入演示账号信息和医护人员提供的 6 位数字核验码，然后只需点击一次。</p>
+        <div id="accountFields">
+          <label for="username">患者演示账号</label>
+          <input id="username" value="demo_patient" autocomplete="username">
+          <label for="password">演示密码</label>
+          <input id="password" type="password" autocomplete="current-password" placeholder="请输入演示密码">
+        </div>
+        <label for="code">6 位演示核验码</label>
+        <input id="code" class="code-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000" aria-describedby="codeHelp">
+        <p id="codeHelp" class="muted">核验码只用于本次内部演示；多次输错会锁定邀请。</p>
+        <button id="submitButton" type="submit">确认并绑定本人档案</button>
+      </form>
+
+      <div id="done" class="hidden completion">
+        <div class="completion-mark" aria-hidden="true">✓</div>
+        <h3>首次绑定已完成</h3>
+        <p>现在可以关闭此页面。后续资料上传会作为单独任务提供。</p>
+      </div>
+
+      <aside class="care-note">
+        <strong>请注意</strong>
+        <p>这是作品集内部演示，不是正式医疗身份认证，也不提供诊断、处方或急救服务。</p>
+        <p>如有严重不适，请及时前往正规医疗机构。</p>
+      </aside>
+    </section>
+  </main>
+  <script src="/static/invite.js"></script>
+</body>
+</html>
