@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let auth = sessionStorage.getItem("patientToken");
+let accountMode = auth ? "login" : "register";
 let invitationToken = new URLSearchParams(location.hash.slice(1)).get("token")
   || sessionStorage.getItem("invitationToken");
 
@@ -42,7 +43,22 @@ async function request(path, body, withAuth = false) {
 
 function showBindForm() {
   $("bindForm").classList.remove("hidden");
-  if (auth) $("accountFields").classList.add("hidden");
+  if (auth) {
+    $("registerFields").classList.add("hidden");
+    $("loginFields").classList.add("hidden");
+    $("registerMode").classList.add("hidden");
+    $("loginMode").classList.add("hidden");
+    $("submitButton").textContent = "认领本人档案";
+  }
+}
+
+function setAccountMode(mode) {
+  accountMode = mode;
+  $("registerFields").classList.toggle("hidden", mode !== "register");
+  $("loginFields").classList.toggle("hidden", mode !== "login");
+  $("registerMode").className = mode === "register" ? "" : "secondary";
+  $("loginMode").className = mode === "login" ? "" : "secondary";
+  $("submitButton").textContent = mode === "register" ? "创建账号并认领档案" : "登录并认领档案";
 }
 
 async function check() {
@@ -66,12 +82,29 @@ $("code").addEventListener("input", (event) => {
   event.target.value = event.target.value.replace(/\D/g, "").slice(0, 6);
 });
 
+$("registerMode").onclick = () => setAccountMode("register");
+$("loginMode").onclick = () => setAccountMode("login");
+
 $("bindForm").onsubmit = async (event) => {
   event.preventDefault();
   const button = $("submitButton");
   button.disabled = true;
   try {
-    if (!auth) {
+    if (!auth && accountMode === "register") {
+      if ($("newPassword").value !== $("confirmPassword").value) {
+        throw new Error("两次输入的密码不一致");
+      }
+      const registered = await request("/invitations/register", {
+        invitation_token: invitationToken,
+        verification_code: $("code").value,
+        password: $("newPassword").value,
+      });
+      $("createdUsername").textContent = registered.username;
+      auth = registered.access_token;
+      sessionStorage.setItem("patientToken", auth);
+      $("newPassword").value = "";
+      $("confirmPassword").value = "";
+    } else if (!auth) {
       const login = await request("/auth/login", {
         username: $("username").value,
         password: $("password").value,
@@ -80,10 +113,12 @@ $("bindForm").onsubmit = async (event) => {
       sessionStorage.setItem("patientToken", auth);
       $("password").value = "";
     }
-    const result = await request("/invitations/bind", {
-      invitation_token: invitationToken,
-      verification_code: $("code").value,
-    }, true);
+    const result = accountMode === "register" && auth
+      ? { already_bound: false }
+      : await request("/invitations/bind", {
+          invitation_token: invitationToken,
+          verification_code: $("code").value,
+        }, true);
     $("bindForm").classList.add("hidden");
     $("done").classList.remove("hidden");
     show(result.already_bound ? "该账号已经绑定本人档案" : "核验成功");
@@ -94,7 +129,17 @@ $("bindForm").onsubmit = async (event) => {
       sessionStorage.removeItem("patientToken");
       $("accountFields").classList.remove("hidden");
     }
-    show("信息未核验通过，请检查后重试或请医护人员重新生成邀请", true);
+    const safeMessages = new Set([
+      "两次输入的密码不一致",
+      "该患者档案已经关联账号，请使用已有账号登录。",
+      "该账号名称已被使用，请更换后重试。",
+    ]);
+    show(
+      safeMessages.has(error.message)
+        ? error.message
+        : "信息未核验通过，请检查后重试或请医护人员重新生成邀请",
+      true,
+    );
     button.disabled = false;
   }
 };

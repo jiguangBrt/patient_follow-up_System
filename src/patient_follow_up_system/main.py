@@ -21,6 +21,7 @@ from patient_follow_up_system.auth import (
     authenticate_user,
     create_access_token,
     get_current_user,
+    hash_password,
     require_env,
     require_roles,
 )
@@ -42,6 +43,9 @@ from patient_follow_up_system.models import (
     PatientIntakeLink,
     PatientIntakeSubmission,
     PatientInvitation,
+    PatientDocument,
+    PatientDemoConsent,
+    PatientNoticeVersion,
     User,
     UserRole,
 )
@@ -95,7 +99,6 @@ class RoleDemoResponse(BaseModel):
 
 
 class PatientCreateRequest(BaseModel):
-    patient_code: str = Field(min_length=1, max_length=32)
     display_name: str = Field(min_length=1, max_length=100)
 
 
@@ -108,7 +111,6 @@ class PatientResponse(BaseModel):
 
 
 class EncounterCreateRequest(BaseModel):
-    encounter_code: str = Field(min_length=1, max_length=32)
     occurred_at: datetime
     display_label: str = Field(min_length=1, max_length=100)
 
@@ -168,6 +170,18 @@ class InvitationBindResponse(BaseModel):
     already_bound: bool
 
 
+class InvitationRegisterRequest(InvitationBindRequest):
+    password: str = Field(min_length=8, max_length=128)
+
+
+class InvitationRegisterResponse(BaseModel):
+    username: str
+    access_token: str
+    token_type: str
+    expires_in: int
+    patient: PatientResponse
+
+
 class InvitationRevokeResponse(BaseModel):
     id: int
     state: InvitationState
@@ -191,7 +205,7 @@ class IntakeSubmissionRequest(IntakeTokenRequest):
     sex: str = Field(pattern=r"^(男|女|未说明)$")
     date_of_birth: date
     operator_relationship: str = Field(pattern=r"^(本人|家属协助)$")
-    notice_version: str = Field(pattern=r"^demo-notice-v1$")
+    notice_version_id: int = Field(ge=1)
     consent_given: bool
     document_name: str = Field(min_length=1, max_length=255)
     document_mime_type: str = Field(pattern=r"^(image/jpeg|image/png|application/pdf)$")
@@ -210,11 +224,65 @@ class IntakeSubmissionResponse(BaseModel):
     notice_version: str | None
     has_document: bool
     extraction_status: str
+    consented_at: datetime | None = None
+    consent_is_legacy_incomplete: bool = False
+
+
+class PatientNoticeResponse(BaseModel):
+    id: int
+    notice_key: str
+    version: str
+    title: str
+    content: str
+    content_sha256: str
+    effective_at: datetime
+
+
+class PatientDocumentCreateRequest(BaseModel):
+    event_date: date
+    display_label: str = Field(min_length=1, max_length=100)
+    patient_note: str | None = Field(default=None, max_length=500)
+    notice_version_id: int = Field(ge=1)
+    consent_given: bool
+    document_name: str = Field(min_length=1, max_length=255)
+    document_mime_type: str = Field(pattern=r"^(image/jpeg|image/png|application/pdf)$")
+    document_base64: str = Field(min_length=4, max_length=11_000_000)
+
+
+class PatientDocumentReviewRequest(BaseModel):
+    action: str = Field(pattern=r"^(approve|reject)$")
+    confirmed_event_date: date | None = None
+    confirmed_label: str | None = Field(default=None, max_length=100)
+    doctor_summary: str | None = Field(default=None, max_length=1000)
+
+
+class PatientDocumentResponse(BaseModel):
+    id: int
+    patient_id: int
+    event_date: date
+    display_label: str
+    patient_note: str | None
+    original_name: str
+    mime_type: str
+    size_bytes: int
+    review_status: str
+    extraction_status: str
+    confirmed_event_date: date | None
+    confirmed_label: str | None
+    doctor_summary: str | None
+    consented_at: datetime
+    notice_version: str
+    reviewed_at: datetime | None
+    created_at: datetime
+
+
+class DoctorNoticeResponse(PatientNoticeResponse):
+    status: str
+    published_at: datetime
 
 
 class IntakeReviewRequest(BaseModel):
     action: str = Field(pattern=r"^(approve|reject)$")
-    patient_code: str | None = Field(default=None, max_length=32)
     review_note: str | None = Field(default=None, max_length=500)
 
 
@@ -344,24 +412,163 @@ def accessible_patient_or_404(
     return patient
 
 
+def current_patient_notice(db: Session, now: datetime | None = None) -> PatientNoticeVersion | None:
+    current = now if now is not None and now.tzinfo is None else utc_for_sqlite(now or datetime.now(UTC))
+    return db.scalar(
+        select(PatientNoticeVersion)
+        .where(
+            PatientNoticeVersion.notice_key == "patient-intake-notice",
+            PatientNoticeVersion.status == "published",
+            PatientNoticeVersion.is_legacy_incomplete.is_(False),
+            PatientNoticeVersion.published_at.is_not(None),
+            PatientNoticeVersion.effective_at.is_not(None),
+            PatientNoticeVersion.effective_at <= current,
+            (PatientNoticeVersion.retired_at.is_(None) | (PatientNoticeVersion.retired_at > current)),
+        )
+        .order_by(PatientNoticeVersion.effective_at.desc(), PatientNoticeVersion.id.desc())
+    )
+
+
+def patient_document_response(
+    document: PatientDocument,
+    db: Session,
+) -> PatientDocumentResponse:
+    notice = db.get(PatientNoticeVersion, document.notice_version_id)
+    return PatientDocumentResponse(
+        id=document.id,
+        patient_id=document.patient_id,
+        event_date=document.event_date,
+        display_label=document.display_label,
+        patient_note=document.patient_note,
+        original_name=document.original_name,
+        mime_type=document.mime_type,
+        size_bytes=document.size_bytes,
+        review_status=document.review_status,
+        extraction_status=document.extraction_status,
+        confirmed_event_date=document.confirmed_event_date,
+        confirmed_label=document.confirmed_label,
+        doctor_summary=document.doctor_summary,
+        consented_at=as_utc(document.consented_at),
+        notice_version=notice.version if notice else "unknown",
+        reviewed_at=as_utc(document.reviewed_at) if document.reviewed_at else None,
+        created_at=as_utc(document.created_at),
+    )
+
+
+def decode_uploaded_document(
+    document_base64: str,
+    mime_type: str,
+) -> tuple[bytes, str]:
+    try:
+        document_bytes = base64.b64decode(document_base64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="Document data is invalid.") from exc
+    if not document_bytes or len(document_bytes) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Document must be 8 MB or smaller.")
+    signatures = {
+        "image/jpeg": document_bytes.startswith(b"\xff\xd8\xff"),
+        "image/png": document_bytes.startswith(b"\x89PNG\r\n\x1a\n"),
+        "application/pdf": document_bytes.startswith(b"%PDF-"),
+    }
+    if not signatures.get(mime_type, False):
+        raise HTTPException(status_code=422, detail="Document type does not match its content.")
+    suffix = {
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "application/pdf": ".pdf",
+    }[mime_type]
+    return document_bytes, suffix
+
+
+def patient_upload_root() -> Path:
+    return Path(os.getenv("PATIENT_UPLOAD_DIR", ".local/patient_uploads"))
+
+
+def generate_numeric_patient_username(db: Session) -> str:
+    for _ in range(20):
+        username = str(secrets.randbelow(90_000_000) + 10_000_000)
+        if db.scalar(select(User.id).where(User.username == username)) is None:
+            return username
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="暂时无法分配患者账号，请稍后重试。",
+    )
+
+
+def generate_record_code(db: Session, model: type, column, prefix: str) -> str:
+    """Generate a non-identifying business code and avoid known collisions."""
+    date_part = datetime.now(UTC).strftime("%Y%m%d")
+    for _ in range(10):
+        code = f"{prefix}-{date_part}-{secrets.token_hex(4).upper()}"
+        if db.scalar(select(model.id).where(column == code)) is None:
+            return code
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="暂时无法生成内部编号，请稍后重试。",
+    )
+
+
+def notice_response(notice: PatientNoticeVersion) -> PatientNoticeResponse:
+    return PatientNoticeResponse(
+        id=notice.id,
+        notice_key=notice.notice_key,
+        version=notice.version,
+        title=notice.title,
+        content=notice.content,
+        content_sha256=notice.content_sha256,
+        effective_at=as_utc(notice.effective_at),
+    )
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
+@app.get("/patient-notices/current", response_model=PatientNoticeResponse)
+def read_current_patient_notice(
+    db: Annotated[Session, Depends(get_db)],
+) -> PatientNoticeResponse:
+    notice = current_patient_notice(db)
+    if notice is None:
+        raise HTTPException(status_code=503, detail="当前没有可用的患者须知，请联系医护人员。")
+    return notice_response(notice)
+
+
+@app.get("/doctor/patient-notices/current", response_model=DoctorNoticeResponse)
+def read_doctor_current_patient_notice(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+) -> DoctorNoticeResponse:
+    notice = current_patient_notice(db)
+    if notice is None:
+        raise HTTPException(status_code=404, detail="No current patient notice is available.")
+    public = notice_response(notice)
+    return DoctorNoticeResponse(
+        **public.model_dump(),
+        status=notice.status,
+        published_at=as_utc(notice.published_at),
+    )
+
+
 @app.get("/doctor", include_in_schema=False)
 def doctor_page() -> FileResponse:
-    return FileResponse(web_root / "doctor.html")
+    return FileResponse(web_root / "doctor.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/invite", include_in_schema=False)
 def invitation_page() -> FileResponse:
-    return FileResponse(web_root / "invite.html")
+    return FileResponse(web_root / "invite.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/patient", include_in_schema=False)
+def patient_page() -> FileResponse:
+    return FileResponse(web_root / "patient.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/intake", include_in_schema=False)
 def intake_page() -> FileResponse:
-    return FileResponse(web_root / "intake.html")
+    return FileResponse(web_root / "intake.html", headers={"Cache-Control": "no-store"})
 
 
 @app.post("/chat", response_model=ChatResponse)
@@ -432,7 +639,7 @@ def create_patient(
     ],
 ) -> PatientResponse:
     patient = Patient(
-        patient_code=request.patient_code,
+        patient_code=generate_record_code(db, Patient, Patient.patient_code, "P"),
         display_name=request.display_name,
         responsible_doctor_id=current_user.id,
     )
@@ -443,7 +650,7 @@ def create_patient(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Patient code already exists.",
+            detail="系统生成患者编号时发生冲突，请重试。",
         ) from exc
     db.refresh(patient)
     return patient_response(patient)
@@ -673,9 +880,79 @@ def bind_patient_invitation(
     )
 
 
+@app.post(
+    "/invitations/register",
+    response_model=InvitationRegisterResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def register_and_bind_patient_invitation(
+    request: InvitationRegisterRequest,
+    db: Annotated[Session, Depends(get_db)],
+) -> InvitationRegisterResponse:
+    invitation = invitation_by_token(db, request.invitation_token)
+    if invitation is None:
+        raise unavailable_invitation()
+    patient = db.get(Patient, invitation.patient_id)
+    if patient is None:
+        raise unavailable_invitation()
+    if invitation_state(invitation) != InvitationState.AVAILABLE:
+        raise unavailable_invitation()
+
+    if not verify_verification_code(request.verification_code, invitation.verification_code_hash):
+        invitation.failed_verification_attempts += 1
+        if invitation.failed_verification_attempts >= MAX_FAILED_VERIFICATION_ATTEMPTS:
+            invitation.locked_at = utc_for_sqlite(datetime.now(UTC))
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invitation verification failed.",
+        )
+    if patient.patient_user_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="该患者档案已经关联账号，请使用已有账号登录。",
+        )
+    username = generate_numeric_patient_username(db)
+    user = User(
+        username=username,
+        display_name=patient.display_name,
+        password_hash=hash_password(request.password),
+        role=UserRole.PATIENT,
+    )
+    db.add(user)
+    try:
+        db.flush()
+        patient.patient_user_id = user.id
+        invitation.used_count += 1
+        invitation.last_used_at = utc_for_sqlite(datetime.now(UTC))
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="账号创建或患者档案关联失败，请重试。",
+        ) from exc
+    db.refresh(patient)
+    return InvitationRegisterResponse(
+        username=user.username,
+        access_token=create_access_token(user.id, user.role),
+        token_type="bearer",
+        expires_in=int(require_env("ACCESS_TOKEN_EXPIRE_MINUTES")) * 60,
+        patient=patient_response(patient),
+    )
+
+
 def intake_submission_response(
     submission: PatientIntakeSubmission,
+    db: Session | None = None,
 ) -> IntakeSubmissionResponse:
+    consent = None
+    if db is not None:
+        consent = db.scalar(
+            select(PatientDemoConsent).where(
+                PatientDemoConsent.intake_submission_id == submission.id
+            )
+        )
     return IntakeSubmissionResponse(
         id=submission.id,
         display_name=submission.display_name,
@@ -688,6 +965,8 @@ def intake_submission_response(
         notice_version=submission.notice_version,
         has_document=bool(submission.document_storage_name),
         extraction_status=submission.extraction_status,
+        consented_at=(as_utc(consent.consented_at) if consent else None),
+        consent_is_legacy_incomplete=(consent.is_legacy_incomplete if consent else False),
     )
 
 
@@ -763,9 +1042,15 @@ def submit_intake(
     submission_digest = digest_invitation_token(request.submission_key)
     existing = db.scalar(select(PatientIntakeSubmission).where(PatientIntakeSubmission.submission_digest == submission_digest))
     if existing is not None:
-        return intake_submission_response(existing)
+        return intake_submission_response(existing, db)
     if not request.consent_given:
         raise HTTPException(status_code=422, detail="Demo notice consent is required.")
+    notice = current_patient_notice(db, now)
+    if notice is None or notice.id != request.notice_version_id:
+        raise HTTPException(
+            status_code=409,
+            detail="患者须知已更新或不可用，请重新阅读当前版本后再提交。",
+        )
     try:
         document_bytes = base64.b64decode(request.document_base64, validate=True)
     except (binascii.Error, ValueError) as exc:
@@ -791,7 +1076,7 @@ def submit_intake(
         sex=request.sex,
         date_of_birth=request.date_of_birth,
         operator_relationship=request.operator_relationship,
-        notice_version=request.notice_version,
+        notice_version=notice.version,
         consented_at=utc_for_sqlite(datetime.now(UTC)),
         document_name=Path(request.document_name).name,
         document_mime_type=request.document_mime_type,
@@ -800,9 +1085,19 @@ def submit_intake(
     )
     link.used_count += 1
     db.add(submission)
+    db.flush()
+    db.add(
+        PatientDemoConsent(
+            notice_version_id=notice.id,
+            intake_submission_id=submission.id,
+            consented_at=submission.consented_at,
+            context="anonymous-intake-web",
+            notice_content_sha256=notice.content_sha256,
+        )
+    )
     db.commit()
     db.refresh(submission)
-    return intake_submission_response(submission)
+    return intake_submission_response(submission, db)
 
 
 @app.get("/intake-submissions", response_model=list[IntakeSubmissionResponse])
@@ -816,7 +1111,7 @@ def list_intake_submissions(
         .where(PatientIntakeLink.created_by_doctor_id == current_user.id)
         .order_by(PatientIntakeSubmission.id.desc())
     ).all()
-    return [intake_submission_response(item) for item in items]
+    return [intake_submission_response(item, db) for item in items]
 
 
 @app.get("/intake-submissions/{submission_id}/document", response_class=FileResponse)
@@ -855,16 +1150,14 @@ def review_intake_submission(
     if submission is None:
         raise HTTPException(status_code=404, detail="Intake submission was not found in the allowed data scope.")
     if submission.status != "pending":
-        return intake_submission_response(submission)
+        return intake_submission_response(submission, db)
     if request.action == "reject":
         submission.status = "rejected"
     else:
-        if not request.patient_code:
-            raise HTTPException(status_code=422, detail="Patient code is required for approval.")
         if not submission.notice_version or not submission.document_storage_name:
             raise HTTPException(status_code=409, detail="Submission is incomplete and cannot be approved.")
         patient = Patient(
-            patient_code=request.patient_code,
+            patient_code=generate_record_code(db, Patient, Patient.patient_code, "P"),
             display_name=submission.display_name,
             responsible_doctor_id=current_user.id,
         )
@@ -873,7 +1166,7 @@ def review_intake_submission(
             db.flush()
         except IntegrityError as exc:
             db.rollback()
-            raise HTTPException(status_code=409, detail="Patient code already exists.") from exc
+            raise HTTPException(status_code=409, detail="系统生成患者编号时发生冲突，请重试。") from exc
         submission.status = "approved"
         submission.created_patient_id = patient.id
     submission.reviewed_by_doctor_id = current_user.id
@@ -881,7 +1174,139 @@ def review_intake_submission(
     submission.review_note = request.review_note
     db.commit()
     db.refresh(submission)
-    return intake_submission_response(submission)
+    return intake_submission_response(submission, db)
+
+
+@app.post(
+    "/patients/{patient_id}/documents",
+    response_model=PatientDocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def submit_patient_document(
+    patient_id: int,
+    request: PatientDocumentCreateRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.PATIENT))],
+) -> PatientDocumentResponse:
+    patient = accessible_patient_or_404(db, patient_id, current_user)
+    if patient.patient_user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Patient was not found in the allowed data scope.")
+    if not request.consent_given:
+        raise HTTPException(status_code=422, detail="当前患者须知的演示同意是提交资料的必要步骤。")
+    notice = current_patient_notice(db)
+    if notice is None or notice.id != request.notice_version_id:
+        raise HTTPException(status_code=409, detail="患者须知已更新，请重新阅读当前版本后再提交。")
+
+    document_bytes, suffix = decode_uploaded_document(
+        request.document_base64,
+        request.document_mime_type,
+    )
+    upload_root = patient_upload_root()
+    upload_root.mkdir(parents=True, exist_ok=True)
+    storage_name = f"{secrets.token_hex(24)}{suffix}"
+    storage_path = upload_root / storage_name
+    storage_path.write_bytes(document_bytes)
+    now = utc_for_sqlite(datetime.now(UTC))
+    document = PatientDocument(
+        patient_id=patient.id,
+        submitted_by_user_id=current_user.id,
+        notice_version_id=notice.id,
+        event_date=request.event_date,
+        display_label=request.display_label,
+        patient_note=request.patient_note or None,
+        original_name=Path(request.document_name).name,
+        mime_type=request.document_mime_type,
+        storage_name=storage_name,
+        sha256=hashlib.sha256(document_bytes).hexdigest(),
+        size_bytes=len(document_bytes),
+        notice_content_sha256=notice.content_sha256,
+        consented_at=now,
+        extraction_status="not_run",
+        review_status="pending",
+    )
+    db.add(document)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        storage_path.unlink(missing_ok=True)
+        raise HTTPException(status_code=409, detail="资料提交失败，请重试。") from exc
+    db.refresh(document)
+    return patient_document_response(document, db)
+
+
+@app.get(
+    "/patients/{patient_id}/documents",
+    response_model=list[PatientDocumentResponse],
+)
+def list_patient_documents(
+    patient_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.PATIENT))],
+) -> list[PatientDocumentResponse]:
+    patient = accessible_patient_or_404(db, patient_id, current_user)
+    documents = db.scalars(
+        select(PatientDocument)
+        .where(PatientDocument.patient_id == patient.id)
+        .order_by(PatientDocument.id.desc())
+    ).all()
+    documents.sort(
+        key=lambda document: (
+            document.confirmed_event_date or document.event_date,
+            document.id,
+        ),
+        reverse=True,
+    )
+    return [patient_document_response(document, db) for document in documents]
+
+
+@app.get("/patient-documents/{document_id}/file", response_class=FileResponse)
+def read_patient_document_file(
+    document_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.PATIENT))],
+) -> FileResponse:
+    document = db.get(PatientDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document was not found in the allowed data scope.")
+    accessible_patient_or_404(db, document.patient_id, current_user)
+    path = patient_upload_root() / document.storage_name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Document file is unavailable.")
+    return FileResponse(path, media_type=document.mime_type, filename=document.original_name)
+
+
+@app.post(
+    "/patient-documents/{document_id}/review",
+    response_model=PatientDocumentResponse,
+)
+def review_patient_document(
+    document_id: int,
+    request: PatientDocumentReviewRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+) -> PatientDocumentResponse:
+    document = db.get(PatientDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=404, detail="Document was not found in the allowed data scope.")
+    accessible_patient_or_404(db, document.patient_id, current_user)
+    if document.review_status != "pending":
+        return patient_document_response(document, db)
+    if request.action == "approve":
+        if not request.confirmed_event_date or not request.confirmed_label or not request.doctor_summary:
+            raise HTTPException(status_code=422, detail="审核通过前请确认事件日期、资料名称和摘要。")
+        document.review_status = "approved"
+        document.confirmed_event_date = request.confirmed_event_date
+        document.confirmed_label = request.confirmed_label
+        document.doctor_summary = request.doctor_summary
+    else:
+        document.review_status = "rejected"
+        document.doctor_summary = request.doctor_summary or "资料未通过审核，请重新提交清晰完整的虚构或去标识化资料。"
+    document.reviewed_by_doctor_id = current_user.id
+    document.reviewed_at = utc_for_sqlite(datetime.now(UTC))
+    db.commit()
+    db.refresh(document)
+    return patient_document_response(document, db)
 
 
 @app.post(
@@ -900,7 +1325,7 @@ def create_encounter(
 ) -> EncounterResponse:
     patient = accessible_patient_or_404(db, patient_id, current_user)
     encounter = Encounter(
-        encounter_code=request.encounter_code,
+        encounter_code=generate_record_code(db, Encounter, Encounter.encounter_code, "E"),
         patient_id=patient.id,
         doctor_id=current_user.id,
         occurred_at=utc_for_sqlite(request.occurred_at),
@@ -913,7 +1338,7 @@ def create_encounter(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Encounter code already exists.",
+            detail="系统生成就诊编号时发生冲突，请重试。",
         ) from exc
     db.refresh(encounter)
     return encounter_response(encounter)

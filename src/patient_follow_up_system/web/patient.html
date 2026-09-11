@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>患者中心</title>
+  <link rel="stylesheet" href="/static/app.css?v=20260911-5">
+</head>
+<body class="patient-page">
+  <header class="patient-header"><h1>患者中心</h1><p>查看与本人账号关联的随访档案</p></header>
+  <main class="mobile">
+    <section class="card patient-card" id="patientLoginCard">
+      <p class="step-label">患者登录</p>
+      <h2>进入我的档案</h2>
+      <form id="patientLoginForm" class="patient-form">
+        <label for="patientUsername">患者账号</label>
+        <input id="patientUsername" autocomplete="username" inputmode="numeric" placeholder="系统分配的 8 位数字账号" required>
+        <label for="patientPassword">登录密码</label>
+        <input id="patientPassword" type="password" autocomplete="current-password" required>
+        <button type="submit">登录患者中心</button>
+      </form>
+      <button type="button" id="showNoAccount" class="secondary">我还没有账号</button>
+      <div id="noAccountHelp" class="notice-box hidden">
+        <strong>首次开户需要医生邀请</strong>
+        <p>请扫描医生为你的档案生成的专属二维码。在邀请页设置账号和密码，并输入医生提供的 6 位核验码。</p>
+        <p class="muted">患者中心不开放任意注册，避免账号认领到错误档案。</p>
+      </div>
+    </section>
+
+    <section class="card patient-card hidden" id="patientHome">
+      <div class="toolbar"><div><p class="step-label">我的档案</p><h2 id="patientName"></h2></div><button id="patientLogout" class="secondary">退出</button></div>
+      <div id="patientStatus" class="status" role="status"></div>
+      <div class="patient-details">
+        <p><strong>系统患者编号：</strong><span id="patientCode"></span></p>
+        <p><strong>账号状态：</strong>已关联本人账号</p>
+      </div>
+      <h3>当前患者须知</h3>
+      <p id="patientNotice" class="muted"></p>
+      <button type="button" id="showDocumentUpload">提交随访资料</button>
+      <form id="documentUploadForm" class="patient-form hidden">
+        <h3>提交一份随访资料</h3>
+        <label for="documentEventDate">资料发生日期</label>
+        <input id="documentEventDate" type="date" required>
+        <label for="documentLabel">资料名称</label>
+        <input id="documentLabel" maxlength="100" placeholder="例如 模拟复查报告" required>
+        <label for="documentNote">给医生的说明（选填）</label>
+        <textarea id="documentNote" maxlength="500" placeholder="请勿填写真实身份或真实临床信息"></textarea>
+        <label for="patientDocumentFile">选择资料</label>
+        <input id="patientDocumentFile" type="file" accept="image/jpeg,image/png,application/pdf" required>
+        <label class="check-row"><input id="documentConsent" type="checkbox" required><span>我已阅读当前患者须知，并同意将本次虚构或去标识化资料用于试用流程。</span></label>
+        <button type="submit">提交给医生审核</button>
+        <button type="button" id="cancelDocumentUpload" class="secondary">取消</button>
+      </form>
+      <h3>资料时间轴</h3>
+      <div id="patientDocuments"></div>
+      <h3>我的就诊记录</h3>
+      <div id="patientEncounters"></div>
+      <p class="muted">只有医生确认通过的资料会作为已确认事件显示；OCR 当前未运行，不会生成虚假识别结果。</p>
+    </section>
+
+    <div id="patientMessage" class="status hidden" role="status" aria-live="polite"></div>
+    <aside class="care-note"><strong>请注意</strong><p>当前为医生客户试用版，不提供诊断、处方或急救服务。</p></aside>
+  </main>
+  <script src="/static/patient.js?v=20260911-5"></script>
+</body>
+</html>
