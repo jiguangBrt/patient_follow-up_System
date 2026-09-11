@@ -8,9 +8,12 @@ from sqlalchemy import (
     Enum as SqlEnum,
     ForeignKey,
     Integer,
+    Index,
     String,
+    Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -253,3 +256,92 @@ class PatientIntakeSubmission(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), unique=True, nullable=True)
+
+
+class PatientNoticeVersion(Base):
+    __tablename__ = "patient_notice_versions"
+    __table_args__ = (
+        UniqueConstraint("notice_key", "version", name="uq_patient_notice_key_version"),
+        Index(
+            "uq_patient_notice_one_published",
+            "notice_key",
+            unique=True,
+            sqlite_where=text("status = 'published' AND retired_at IS NULL"),
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'published', 'retired')",
+            name="ck_patient_notice_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    notice_key: Mapped[str] = mapped_column(String(80), index=True, nullable=False)
+    version: Mapped[str] = mapped_column(String(30), nullable=False)
+    title: Mapped[str] = mapped_column(String(160), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), index=True, nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    effective_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    published_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    is_legacy_incomplete: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
+
+
+class PatientDemoConsent(Base):
+    __tablename__ = "patient_demo_consents"
+    __table_args__ = (
+        UniqueConstraint("intake_submission_id", "notice_version_id", name="uq_intake_notice_consent"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    notice_version_id: Mapped[int] = mapped_column(ForeignKey("patient_notice_versions.id"), index=True, nullable=False)
+    intake_submission_id: Mapped[int] = mapped_column(ForeignKey("patient_intake_submissions.id"), index=True, nullable=False)
+    patient_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), index=True, nullable=True)
+    consented_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    context: Mapped[str] = mapped_column(String(50), nullable=False)
+    notice_content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    is_legacy_incomplete: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
+
+
+class PatientDocument(Base):
+    __tablename__ = "patient_documents"
+    __table_args__ = (
+        CheckConstraint(
+            "review_status IN ('pending', 'approved', 'rejected')",
+            name="ck_patient_document_review_status",
+        ),
+        CheckConstraint(
+            "extraction_status IN ('pending', 'not_run')",
+            name="ck_patient_document_extraction_status",
+        ),
+        CheckConstraint("size_bytes > 0", name="ck_patient_document_size_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True, nullable=False)
+    submitted_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    notice_version_id: Mapped[int] = mapped_column(ForeignKey("patient_notice_versions.id"), index=True, nullable=False)
+    event_date: Mapped[date] = mapped_column(nullable=False, index=True)
+    display_label: Mapped[str] = mapped_column(String(100), nullable=False)
+    patient_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    storage_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    notice_content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    consented_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    extraction_status: Mapped[str] = mapped_column(String(20), default="not_run", server_default="not_run", nullable=False)
+    review_status: Mapped[str] = mapped_column(String(20), default="pending", server_default="pending", index=True, nullable=False)
+    confirmed_event_date: Mapped[date | None] = mapped_column(nullable=True, index=True)
+    confirmed_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    doctor_summary: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    reviewed_by_doctor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
