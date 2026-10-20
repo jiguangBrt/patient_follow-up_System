@@ -1,0 +1,18 @@
+.clinical-main { max-width: none; }
+.clinical-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; margin:24px 0; align-items:start; }
+.evidence-panel { position:sticky; top:16px; }
+.evidence-panel select { min-width:80px; margin-left:12px; }
+#previewWrap { position:relative; background:#edf2f5; }
+#preview { width:100%; display:block; }
+#highlight { position:absolute; border:3px solid #da6c00; background:#ffcc4422; pointer-events:none; }
+.field-review { padding:14px; border:1px solid #dbe6ee; border-radius:10px; margin-bottom:12px; }
+.field-review h3 { margin:0 0 8px; font-size:17px; }
+.field-review textarea, .field-review select { width:100%; min-width:0; }
+.field-review textarea { min-height:72px; margin:8px 0; }
+.field-review .candidate { white-space:pre-wrap; overflow-wrap:anywhere; max-height:180px; overflow:auto; font-size:14px; }
+.field-review .row { gap:8px; }
+.review-actions { border-top:1px solid #dbe6ee; padding-top:22px; }
+#targetPatient { display:block; width:100%; margin:10px 0; }
+#historyText { white-space:pre-wrap; overflow-wrap:anywhere; max-height:360px; overflow:auto; }
+#documentMeta { overflow-wrap:anywhere; }
+@media(max-width:800px) { .clinical-grid { grid-template-columns:1fr; } .evidence-panel { position:static; } }

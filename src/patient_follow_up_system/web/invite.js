@@ -100,6 +100,7 @@ $("bindForm").onsubmit = async (event) => {
         password: $("newPassword").value,
       });
       $("createdUsername").textContent = registered.username;
+      $("newAccountSummary").classList.remove("hidden");
       auth = registered.access_token;
       sessionStorage.setItem("patientToken", auth);
       $("newPassword").value = "";
@@ -127,7 +128,9 @@ $("bindForm").onsubmit = async (event) => {
     if (error.status === 401 || error.status === 403) {
       auth = null;
       sessionStorage.removeItem("patientToken");
-      $("accountFields").classList.remove("hidden");
+      $("registerMode").classList.remove("hidden");
+      $("loginMode").classList.remove("hidden");
+      setAccountMode("login");
     }
     const safeMessages = new Set([
       "两次输入的密码不一致",

@@ -33,6 +33,7 @@ from patient_follow_up_system.models import (
 @pytest.fixture
 def invitation_app(tmp_path, monkeypatch):
     monkeypatch.setenv("PATIENT_UPLOAD_DIR", str(tmp_path / "patient_uploads"))
+    monkeypatch.setenv("INTAKE_UPLOAD_DIR", str(tmp_path / "intake_uploads"))
     engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}")
 
     @event.listens_for(engine, "connect")
@@ -295,7 +296,7 @@ def test_pages_and_api_paths_do_not_put_tokens_in_paths(invitation_app) -> None:
     assert "新增患者" in doctor_page.text
     assert "系统自动生成患者编号和就诊编号" in doctor_page.text
     assert "新增模拟就诊" in doctor_page.text
-    assert "打开患者端" in doctor_page.text
+    assert client.get("/static/doctor-shell.js").status_code == 200
     assert client.get("/invite").status_code == 200
     patient_page = client.get("/patient")
     assert patient_page.status_code == 200

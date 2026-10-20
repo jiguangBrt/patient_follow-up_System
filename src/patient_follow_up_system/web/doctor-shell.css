@@ -1,0 +1,67 @@
+body.doctor-app { background:#f5f7fa; color:#27384b; font-family:"Microsoft YaHei",system-ui,sans-serif; }
+.doctor-sidebar { position:fixed; inset:0 auto 0 0; width:236px; background:#142f45; color:#e3edf5; display:flex; flex-direction:column; z-index:20; }
+.doctor-brand { height:105px; display:flex; align-items:center; gap:12px; padding:0 25px; font-size:19px; font-weight:700; letter-spacing:.5px; }
+.brand-mark { width:42px; height:42px; display:grid; place-items:center; border-radius:12px; background:#51c4b1; color:#123748; font-size:23px; }
+.doctor-brand small { display:block; font-size:11px; font-weight:400; margin-top:5px; color:#96aebf; letter-spacing:2px; }
+.doctor-sidebar nav { overflow:auto; flex:1; padding:0 14px; }
+.nav-group { margin:8px 0 25px; }
+.nav-group > p { padding-left:14px; margin:0 0 10px; color:#8ca5b8; font-size:11px; letter-spacing:1.5px; }
+.nav-group a { display:flex; align-items:center; gap:12px; min-height:46px; padding:0 14px; margin:5px 0; border-radius:8px; color:#b6c9d7; text-decoration:none; font-size:14px; transition:background .15s,color .15s; }
+.nav-group a:hover { background:#203e54; color:white; }
+.nav-group a.active { color:#fff; background:#24635f; box-shadow:inset 3px 0 #70d9c2; }
+.nav-group a svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+.nav-group a small { margin-left:auto; padding:2px 4px; color:#91a6b5; border:1px solid #3a5061; border-radius:4px; font-size:9px; white-space:nowrap; }
+.sidebar-footer { padding:16px 19px 21px; border-top:1px solid #294458; }
+.sidebar-footer > a { display:block; padding:0 4px 17px; color:#9db8c9; font-size:12px; text-decoration:none; }
+.sidebar-profile { display:flex; gap:10px; align-items:center; }
+.profile-avatar { background:#29475d; border-radius:50%; width:32px; height:32px; display:grid; place-items:center; font-size:13px; }
+.sidebar-profile strong { display:block; max-width:112px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:500; }
+.sidebar-profile small { display:block; color:#8da6b7; font-size:10px; margin-top:4px; }
+.sidebar-profile button { margin-left:auto; min-height:30px; padding:4px; background:transparent; color:#a8becd; font-size:11px; font-weight:400; border-radius:4px; }
+.doctor-main { margin:0 0 0 236px; padding:0 38px 40px; max-width:none; min-width:0; }
+.workspace-topbar { display:flex; align-items:center; justify-content:space-between; height:84px; border-bottom:1px solid #e2e8ef; margin-bottom:30px; }
+.workspace-topbar h1 { margin:0; font-size:23px; font-weight:650; letter-spacing:1px; }
+.workspace-topbar .breadcrumb { margin:0 0 7px; color:#8594a4; font-size:11px; }
+.trial-tag { color:#627b8f; font-size:11px; background:#e9eff4; padding:7px 11px; border-radius:5px; }
+.doctor-app .card { padding:25px 28px; border:1px solid #e2e8ef; border-radius:11px; box-shadow:none; margin-bottom:22px; }
+.doctor-app h2 { font-size:17px; color:#273c50; font-weight:650; }
+.doctor-app h3 { font-size:15px; }
+.doctor-app .muted { color:#8191a0; font-size:12px; line-height:1.75; }
+.doctor-app button,.doctor-app .buttonLink { border-radius:7px; min-height:37px; padding:8px 15px; font-size:12px; font-weight:500; }
+.doctor-app button { background:#27786e; }
+.doctor-app button.secondary,.doctor-app .buttonLink.secondary { background:#f0f4f7; color:#577083; }
+.doctor-app input,.doctor-app select,.doctor-app textarea { border-radius:7px; min-height:38px; font-size:13px; border-color:#d6e0e8; }
+.doctor-app input:focus,.doctor-app select:focus,.doctor-app textarea:focus { outline:2px solid #88c7bd; outline-offset:1px; }
+.doctor-app .toolbar h2 { margin:0 0 5px; }
+.doctor-app .toolbar .muted { margin:0; }
+.patient-searchbar { display:flex; align-items:center; justify-content:space-between; gap:24px; margin:25px 0 14px; }
+.patient-searchbar input { background:#f8fafc; width:320px; }
+.patient-searchbar span { color:#8093a4; font-size:12px; }
+.patient-list-labels { display:flex; justify-content:space-between; padding:11px 14px; background:#f6f8fa; font-size:11px; color:#8393a2; border-radius:5px; }
+.doctor-app .patient-card-wide { padding:18px 10px; border-top:1px solid #edf1f5; }
+.doctor-app .patient-summary { grid-template-columns:minmax(250px,1fr) 150px auto; gap:28px; }
+.doctor-app .patient-summary h3 { margin:0 0 7px; color:#213e52; }
+.doctor-app .patient-summary .muted { font-size:11px; }
+.doctor-app .badge { margin:0; font-size:11px; font-weight:400; padding:5px 9px; }
+.doctor-app .badge.unbound { background:#fff7e9; color:#ac812f; }
+.doctor-app .badge.bound { background:#ecf7f2; color:#43806c; }
+.doctor-app .patient-details { padding:22px; background:#f7f9fc; font-size:13px; }
+.patient-detail-actions { display:flex; justify-content:flex-end; gap:10px; padding-bottom:16px; margin-bottom:16px; border-bottom:1px solid #e1e8ef; }
+.doctor-app .patient-details p { line-height:1.8; }
+.doctor-app .timeline-item { border-left-width:2px; font-size:13px; }
+.doctor-app .notice-fulltext { white-space:pre-wrap; line-height:1.9; font-size:14px; max-width:850px; }
+.placeholder-content { display:grid; place-items:center; min-height:420px; text-align:center; }
+.placeholder-content .placeholder-icon { width:62px; height:62px; display:grid; place-items:center; margin:0 auto 18px; background:#f0f5f7; border-radius:18px; color:#86a5b3; font-size:27px; }
+.placeholder-content h2 { margin:0 0 12px; }
+.placeholder-content p { color:#8a9baa; font-size:13px; line-height:1.8; }
+.doctor-app #message:not(.hidden) { position:fixed; left:calc(236px + 38px); right:38px; bottom:15px; margin:0; z-index:30; border:1px solid #c5dfd4; box-shadow:0 3px 15px #183d5110; font-size:13px; }
+.doctor-app #message.error { border-color:#eccccc; }
+.doctor-app:not(.signed-in) .doctor-sidebar,.doctor-app:not(.signed-in) .workspace-topbar { display:none; }
+.doctor-app:not(.signed-in) .card:not(#loginCard) { display:none; }
+.doctor-app:not(.signed-in) .doctor-main { margin:12vh auto; max-width:650px; padding:0 30px; }
+.doctor-app:not(.signed-in) #message:not(.hidden) { position:static; }
+.doctor-app #loginCard h2 { font-size:25px; margin-bottom:25px; }
+.doctor-app #loginForm { display:grid; }
+.doctor-app #loginForm input,.doctor-app #loginForm button { width:100%; min-height:44px; }
+@media(min-width:1600px) { .doctor-main { padding-left:52px; padding-right:52px; } }
+@media(max-width:1000px) { .doctor-sidebar { width:210px; } .doctor-brand { padding:0 16px; } .doctor-main { margin-left:210px; padding-left:24px; padding-right:24px; } .doctor-app .patient-summary { grid-template-columns:minmax(180px,1fr) 110px auto; gap:14px; } .doctor-app #message:not(.hidden) { left:234px; right:24px; } }

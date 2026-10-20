@@ -17,6 +17,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from patient_follow_up_system.accounts import router as accounts_router
+from patient_follow_up_system.clinical import router as clinical_router
 from patient_follow_up_system.auth import (
     authenticate_user,
     create_access_token,
@@ -59,6 +61,9 @@ app = FastAPI(
 )
 web_root = Path(__file__).resolve().parent / "web"
 app.mount("/static", StaticFiles(directory=web_root), name="static")
+
+app.include_router(accounts_router)
+app.include_router(clinical_router)
 
 
 class HealthResponse(BaseModel):
@@ -1064,7 +1069,7 @@ def submit_intake(
     }
     if not signatures[request.document_mime_type]:
         raise HTTPException(status_code=422, detail="Document type does not match its content.")
-    upload_root = Path(".local/intake_uploads")
+    upload_root = Path(os.getenv("INTAKE_UPLOAD_DIR", ".local/intake_uploads"))
     upload_root.mkdir(parents=True, exist_ok=True)
     suffix = {"image/jpeg": ".jpg", "image/png": ".png", "application/pdf": ".pdf"}[request.document_mime_type]
     storage_name = f"{secrets.token_hex(24)}{suffix}"
@@ -1129,7 +1134,7 @@ def read_intake_document(
         raise HTTPException(status_code=404, detail="Intake document was not found in the allowed data scope.")
     if not submission.document_storage_name or not submission.document_mime_type or not submission.document_name:
         raise HTTPException(status_code=404, detail="Intake document is unavailable.")
-    path = Path(".local/intake_uploads") / submission.document_storage_name
+    path = Path(os.getenv("INTAKE_UPLOAD_DIR", ".local/intake_uploads")) / submission.document_storage_name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Intake document is unavailable.")
     return FileResponse(path, media_type=submission.document_mime_type, filename=submission.document_name)

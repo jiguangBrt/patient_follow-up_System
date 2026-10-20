@@ -5,38 +5,37 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>医生工作台</title>
   <link rel="stylesheet" href="/static/app.css?v=20260911-5">
+  <link rel="stylesheet" href="/static/doctor-shell.css?v=20261020-2">
 </head>
-<body>
-  <header><h1>患者随访 · 医生工作台</h1><p>医生客户试用版 · 当前仅使用虚构或去标识化数据</p></header>
-  <main>
+<body class="doctor-app">
+  <aside id="doctorSidebar" class="doctor-sidebar"></aside>
+  <main class="doctor-main">
+    <div class="workspace-topbar"><div><p id="breadcrumb" class="breadcrumb">诊疗管理 / 患者管理</p><h1 id="pageTitle">患者管理</h1></div><span class="trial-tag">试用环境 · 仅虚构或去标识化资料</span></div>
     <section class="card" id="loginCard">
       <h2>医生登录</h2>
       <form id="loginForm" class="row">
-        <input id="username" value="demo_doctor" autocomplete="username" aria-label="用户名">
+        <input id="username" autocomplete="username" placeholder="请输入医生用户名" aria-label="用户名">
         <input id="password" type="password" autocomplete="current-password" placeholder="演示密码" aria-label="密码">
         <button>登录</button>
       </form>
       <p class="muted">密码仅提交给本地后端，不会显示在页面。</p>
+      <p><a href="/admin">管理员 · 测试账号管理</a></p>
     </section>
 
     <section class="card hidden" id="patientsCard">
       <div class="toolbar">
-        <h2>我负责的患者</h2>
-        <div class="row">
-          <a class="buttonLink secondary" href="/patient" target="_blank" rel="noreferrer">打开患者端</a>
-          <button id="showNewPatient">新增患者</button>
-          <button id="createIntakeLink">生成通用建档二维码</button>
-          <button id="loadIntakes" class="secondary">待审核申请</button>
-          <button class="secondary" id="logout">退出</button>
-        </div>
+        <div><h2>患者列表</h2><p class="muted">管理我负责的患者档案与就诊资料</p></div>
+        <button id="showNewPatient">＋ 新增患者</button>
       </div>
-      <p class="muted">系统自动生成患者编号和就诊编号。尚未关联账号表示患者档案已经建立，但患者还没有通过专属邀请认领该档案。</p>
+      <div class="patient-searchbar"><input id="patientSearch" type="search" placeholder="搜索患者姓名或编号" aria-label="搜索患者姓名或编号"><span id="patientCounts"></span></div>
+      <div class="patient-list-labels"><span>患者姓名 / 系统编号</span><span>账号状态与档案</span></div>
       <div id="patients"></div>
     </section>
 
     <section class="card hidden" id="noticeCard">
       <h2>当前患者须知</h2>
       <p id="doctorNoticeSummary" class="muted"></p>
+      <div id="doctorNoticeContent" class="notice-fulltext"></div>
     </section>
 
     <section class="card hidden" id="intakeLinkCard">
@@ -48,17 +47,19 @@
     </section>
 
     <section class="card hidden" id="intakesCard">
-      <h2>建档申请审核</h2>
+      <div class="toolbar"><div><h2>建档申请</h2><p class="muted">处理新患者申请，核对资料并建立档案</p></div><div class="row"><button id="refreshIntakes" class="secondary">刷新申请</button><button id="createIntakeLink">生成通用建档二维码</button></div></div>
       <p class="muted">批准后系统自动生成患者编号；系统不会仅凭同名自动合并患者。</p>
       <div id="intakes"></div>
     </section>
+
+    <section class="card hidden" id="placeholderCard"><div class="placeholder-content"><div><span class="placeholder-icon" aria-hidden="true">◷</span><h2 id="placeholderTitle"></h2><p id="placeholderDescription"></p><p>待建设</p></div></div></section>
 
     <section class="card hidden" id="newPatientCard">
       <h2>新增患者</h2>
       <form id="newPatientForm" class="form-grid">
         <label for="patientName">患者显示名称</label>
         <input id="patientName" required maxlength="100" placeholder="例如 虚构患者丙">
-        <p class="muted full-row">编号由系统生成。试用阶段不得录入真实姓名、手机号、证件号、病案号或真实临床信息。</p>
+        <p class="muted full-row">系统自动生成患者编号和就诊编号。试用阶段不得录入真实姓名、手机号、证件号、病案号或真实临床信息。</p>
         <div class="row full-row"><button type="submit">保存患者</button><button type="button" class="secondary" id="cancelNewPatient">取消</button></div>
       </form>
     </section>
@@ -86,6 +87,7 @@
     </section>
     <div id="message" class="status hidden" role="status" aria-live="polite"></div>
   </main>
-  <script src="/static/doctor.js?v=20260911-5"></script>
+  <script src="/static/doctor-shell.js?v=20261020-2"></script>
+  <script src="/static/doctor.js?v=20261020-2"></script>
 </body>
 </html>

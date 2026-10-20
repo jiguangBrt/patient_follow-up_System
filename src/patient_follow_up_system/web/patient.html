@@ -14,7 +14,7 @@
       <h2>进入我的档案</h2>
       <form id="patientLoginForm" class="patient-form">
         <label for="patientUsername">患者账号</label>
-        <input id="patientUsername" autocomplete="username" inputmode="numeric" placeholder="系统分配的 8 位数字账号" required>
+        <input id="patientUsername" autocomplete="username" placeholder="请输入患者账号" required>
         <label for="patientPassword">登录密码</label>
         <input id="patientPassword" type="password" autocomplete="current-password" required>
         <button type="submit">登录患者中心</button>
@@ -35,7 +35,7 @@
         <p><strong>账号状态：</strong>已关联本人账号</p>
       </div>
       <h3>当前患者须知</h3>
-      <p id="patientNotice" class="muted"></p>
+      <details class="notice-box"><summary id="patientNotice"></summary><div id="patientNoticeContent" class="notice-content" style="white-space:pre-wrap"></div></details>
       <button type="button" id="showDocumentUpload">提交随访资料</button>
       <form id="documentUploadForm" class="patient-form hidden">
         <h3>提交一份随访资料</h3>
@@ -55,12 +55,12 @@
       <div id="patientDocuments"></div>
       <h3>我的就诊记录</h3>
       <div id="patientEncounters"></div>
-      <p class="muted">只有医生确认通过的资料会作为已确认事件显示；OCR 当前未运行，不会生成虚假识别结果。</p>
+      <p class="muted">医生确认后，资料才会作为已确认事件显示。识别结果须经医生核对。</p>
     </section>
 
     <div id="patientMessage" class="status hidden" role="status" aria-live="polite"></div>
     <aside class="care-note"><strong>请注意</strong><p>当前为医生客户试用版，不提供诊断、处方或急救服务。</p></aside>
   </main>
-  <script src="/static/patient.js?v=20260911-5"></script>
+  <script src="/static/patient.js?v=20261020"></script>
 </body>
 </html>

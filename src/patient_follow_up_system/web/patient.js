@@ -54,6 +54,7 @@ async function loadPatientHome() {
     $("patientStatus").textContent = "账号已关联，可以查看本人档案";
     $("patientStatus").className = "status success";
     $("patientNotice").textContent = `${notice.title} · 版本 ${notice.version}`;
+    $("patientNoticeContent").textContent = notice.content;
     renderPatientDocuments(documents);
     if (!encounters.length) {
       $("patientEncounters").textContent = "目前没有就诊记录。";

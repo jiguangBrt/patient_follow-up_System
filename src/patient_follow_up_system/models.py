@@ -8,6 +8,7 @@ from sqlalchemy import (
     Enum as SqlEnum,
     ForeignKey,
     Integer,
+    JSON,
     Index,
     String,
     Text,
@@ -344,4 +345,75 @@ class PatientDocument(Base):
     doctor_summary: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     reviewed_by_doctor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
+
+
+class AccountEvent(Base):
+    __tablename__ = "account_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    target_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
+
+
+class ClinicalDocument(Base):
+    """OCR workspace; patient_id stays NULL until a doctor explicitly files it."""
+    __tablename__ = "clinical_documents"
+    __table_args__ = (
+        CheckConstraint("status IN ('buffered', 'filed', 'rejected')", name="ck_clinical_status"),
+        CheckConstraint("extraction_status IN ('not_run', 'ready', 'manual', 'failed')", name="ck_clinical_extraction"),
+        CheckConstraint("status != 'filed' OR patient_id IS NOT NULL", name="ck_clinical_filed_patient"),
+        UniqueConstraint("source_kind", "source_id", name="uq_clinical_source"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_doctor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
+    patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), index=True)
+    source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="buffer")
+    source_id: Mapped[int | None] = mapped_column(Integer)
+    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    mime_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    storage_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="buffered")
+    extraction_status: Mapped[str] = mapped_column(String(20), nullable=False, default="not_run")
+    extraction_error: Mapped[str | None] = mapped_column(String(500))
+    extraction_version: Mapped[str | None] = mapped_column(String(100))
+    document_type: Mapped[str] = mapped_column(String(30), nullable=False, default="unknown")
+    pages: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
+    __mapper_args__ = {"version_id_col": version}
+
+
+class ClinicalField(Base):
+    __tablename__ = "clinical_fields"
+    __table_args__ = (
+        UniqueConstraint("document_id", "key", name="uq_clinical_field_key"),
+        CheckConstraint("review_status IN ('pending', 'confirmed', 'corrected')", name="ck_clinical_field_review"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("clinical_documents.id"), index=True, nullable=False)
+    key: Mapped[str] = mapped_column(String(50), nullable=False)
+    candidate_value: Mapped[str | None] = mapped_column(Text)
+    confidence: Mapped[float | None] = mapped_column()
+    candidate_status: Mapped[str] = mapped_column(String(20), default="missing", nullable=False)
+    evidence: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    review_status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    confirmed_value: Mapped[str | None] = mapped_column(Text)
+    reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ClinicalReviewEvent(Base):
+    __tablename__ = "clinical_review_events"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("clinical_documents.id"), index=True, nullable=False)
+    actor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    changes: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)

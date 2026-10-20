@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>测试账号管理</title><link rel="stylesheet" href="/static/app.css"></head>
+<body>
+<header><h1>患者随访 · 测试账号管理</h1><p>管理员入口</p></header>
+<main>
+  <section class="card" id="loginCard"><h2>管理员登录</h2>
+    <form id="loginForm" class="row"><input id="username" aria-label="管理员用户名" autocomplete="username" required><input id="password" aria-label="管理员密码" type="password" autocomplete="current-password" required><button>登录</button></form>
+  </section>
+  <div id="workspace" class="hidden">
+    <section class="card"><div class="toolbar"><h2>开通测试账号</h2><button id="logout" class="secondary">退出</button></div>
+      <p>患者账号开通后，需通过医生提供的专属邀请认领档案。手机验证码将在后续任务中接入。</p>
+      <form id="accountForm" class="form-grid">
+        <label for="newUsername">用户名</label><input id="newUsername" pattern="[A-Za-z0-9_][A-Za-z0-9_.-]{2,49}" required placeholder="3–50 位字母、数字或 _ . -">
+        <label for="displayName">显示名称</label><input id="displayName" maxlength="100" required>
+        <label for="newPassword">初始密码</label><input id="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
+        <label for="role">账号类型</label><select id="role"><option value="doctor">医生</option><option value="patient">患者</option></select>
+        <button class="full-row">开通账号</button>
+      </form>
+    </section>
+    <section class="card"><div class="toolbar"><h2>账号与状态</h2><button id="refresh" class="secondary">刷新</button></div><div id="accounts"></div></section>
+  </div>
+  <p id="message" role="status" aria-live="polite"></p>
+</main><script src="/static/admin.js"></script>
+</body></html>
