@@ -5,11 +5,23 @@ import os
 import secrets
 import subprocess
 import sys
+import threading
+import time
+import webbrowser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REVIEW_ROOT = ROOT / ".local" / "issue_8_10_review"
 DEMO_PASSWORD = "12345678"
+
+
+def open_when_ready(server, url):
+    """Wait for this server's startup before opening its page."""
+    while not server.started:
+        if server.should_exit:
+            return
+        time.sleep(0.2)
+    webbrowser.open(url)
 
 
 def create_samples():
@@ -77,6 +89,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8010)
     parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--open-browser", action="store_true")
     args = parser.parse_args()
     REVIEW_ROOT.mkdir(parents=True, exist_ok=True)
     key_path = REVIEW_ROOT / "auth-secret.txt"
@@ -141,9 +154,18 @@ def main():
     if not args.prepare_only:
         import uvicorn
 
-        uvicorn.run(
-            "patient_follow_up_system.main:app", host="127.0.0.1", port=args.port
+        server = uvicorn.Server(
+            uvicorn.Config(
+                "patient_follow_up_system.main:app", host="127.0.0.1", port=args.port
+            )
         )
+        if args.open_browser:
+            threading.Thread(
+                target=open_when_ready,
+                args=(server, f"http://127.0.0.1:{args.port}/doctor"),
+                daemon=True,
+            ).start()
+        server.run()
 
 
 if __name__ == "__main__":
