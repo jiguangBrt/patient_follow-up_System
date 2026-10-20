@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-let patientToken = sessionStorage.getItem("patientToken");
+let patientToken = AppSession.require("patient");
 let currentPatient = null;
 let currentNotice = null;
 
@@ -16,6 +16,7 @@ async function patientApi(path, options = {}) {
   const response = await fetch(path, options);
   const data = await response.json();
   if (!response.ok) {
+    if (response.status === 401) AppSession.logout("patient", true);
     const error = new Error(data.detail || "请求失败");
     error.status = response.status;
     throw error;
@@ -33,7 +34,9 @@ async function loadPatientHome() {
     }
     const patients = await patientApi("/patients");
     if (!patients.length) {
-      throw new Error("当前账号尚未关联患者档案，请使用医生提供的专属邀请完成认领。");
+      $("patientUnbound").classList.remove("hidden");
+      $("patientHome").classList.add("hidden");
+      return;
     }
     const patient = patients[0];
     const [encounters, notice, documents] = await Promise.all([
@@ -47,7 +50,7 @@ async function loadPatientHome() {
     ]);
     currentPatient = patient;
     currentNotice = notice;
-    $("patientLoginCard").classList.add("hidden");
+    $("patientUnbound").classList.add("hidden");
     $("patientHome").classList.remove("hidden");
     $("patientName").textContent = patient.display_name;
     $("patientCode").textContent = patient.patient_code;
@@ -76,9 +79,8 @@ async function loadPatientHome() {
   } catch (error) {
     if (error.status === 401 || error.status === 403) {
       patientToken = null;
-      sessionStorage.removeItem("patientToken");
       $("patientHome").classList.add("hidden");
-      $("patientLoginCard").classList.remove("hidden");
+      AppSession.logout("patient", true);
     }
     patientMessage(error.message || "患者中心暂时无法加载", true);
   }
@@ -136,40 +138,10 @@ function fileAsBase64(file) {
   });
 }
 
-$("patientLoginForm").onsubmit = async (event) => {
-  event.preventDefault();
-  try {
-    const login = await patientApi("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({
-        username: $("patientUsername").value.trim(),
-        password: $("patientPassword").value,
-      }),
-    });
-    patientToken = login.access_token;
-    sessionStorage.setItem("patientToken", patientToken);
-    $("patientPassword").value = "";
-    $("patientMessage").classList.add("hidden");
-    await loadPatientHome();
-  } catch (error) {
-    if (error.status === 403) {
-      patientToken = null;
-      sessionStorage.removeItem("patientToken");
-    }
-    $("patientPassword").value = "";
-    patientMessage(
-      error.status === 403
-        ? "该账号不是患者账号，请使用患者账号登录。"
-        : "账号或密码不正确，请重试。",
-      true,
-    );
-  }
-};
-
 $("patientLogout").onclick = () => {
-  sessionStorage.removeItem("patientToken");
-  location.reload();
+  AppSession.logout("patient");
 };
+$("unboundLogout").onclick = () => AppSession.logout("patient");
 
 $("showDocumentUpload").onclick = () => {
   $("documentUploadForm").classList.remove("hidden");
@@ -214,13 +186,6 @@ $("documentUploadForm").onsubmit = async (event) => {
   } finally {
     if (submitButton) submitButton.disabled = false;
   }
-};
-
-$("showNoAccount").onclick = () => {
-  const help = $("noAccountHelp");
-  const willShow = help.classList.contains("hidden");
-  help.classList.toggle("hidden", !willShow);
-  $("showNoAccount").textContent = willShow ? "收起开户说明" : "我还没有账号";
 };
 
 if (patientToken) loadPatientHome();

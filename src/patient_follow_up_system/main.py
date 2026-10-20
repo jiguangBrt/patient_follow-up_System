@@ -82,6 +82,7 @@ class ChatResponse(BaseModel):
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=1, max_length=128)
+    role: UserRole | None = None
 
 
 class TokenResponse(BaseModel):
@@ -556,6 +557,12 @@ def read_doctor_current_patient_notice(
     )
 
 
+@app.get("/", include_in_schema=False)
+@app.get("/login", include_in_schema=False)
+def login_page() -> FileResponse:
+    return FileResponse(web_root / "login.html", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/doctor", include_in_schema=False)
 def doctor_page() -> FileResponse:
     return FileResponse(web_root / "doctor.html", headers={"Cache-Control": "no-store"})
@@ -613,6 +620,17 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password.",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if request.role is not None and user.role != request.role:
+        role_name = {
+            UserRole.PATIENT: "患者",
+            UserRole.DOCTOR: "医生",
+            UserRole.ADMIN: "管理员",
+        }[user.role]
+        raise HTTPException(
+            status_code=403,
+            detail=f"这个账号属于{role_name}，请选择“{role_name}”后登录。",
         )
 
     expire_minutes = int(require_env("ACCESS_TOKEN_EXPIRE_MINUTES"))

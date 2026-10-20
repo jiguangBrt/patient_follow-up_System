@@ -6,16 +6,16 @@ cd /d "%~dp0"
 
 echo 正在启动患者随访医生工作台...
 echo 项目目录：%CD%
-echo 医生工作台：http://127.0.0.1:8010/doctor
+echo 统一登录：http://127.0.0.1:8010/
 echo 医生账号：ddd001    密码：12345678
-echo 管理员入口：http://127.0.0.1:8010/admin
+echo 在同一登录页选择患者、医生或管理员。
 echo 管理员账号：aaa001  密码：12345678
 echo.
 
 powershell -NoProfile -Command "try { $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8010/health' -TimeoutSec 2; $api = Invoke-RestMethod -Uri 'http://127.0.0.1:8010/openapi.json' -TimeoutSec 2; if ($health.status -eq 'ok' -and $api.info.title -eq 'Patient Follow-up System MVP' -and ($api.paths.PSObject.Properties.Name -contains '/clinical-documents')) { exit 0 } } catch {}; exit 1" >nul 2>nul
 if not errorlevel 1 (
     echo 工作台已在运行，正在打开现有页面...
-    start "" "http://127.0.0.1:8010/doctor"
+    start "" "http://127.0.0.1:8010/"
     exit /b 0
 )
 

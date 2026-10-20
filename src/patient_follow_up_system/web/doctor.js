@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-let token = sessionStorage.getItem("doctorToken");
+let token = AppSession.require("doctor");
 let currentInvitationId = null;
 let currentIntakeLinkId = null;
 let selectedPatient = null;
@@ -48,10 +48,7 @@ async function api(path, options = {}) {
   const data = contentType.includes("application/json") ? await response.json() : null;
   if (!response.ok) {
     if (response.status === 401) {
-      sessionStorage.removeItem("doctorToken"); token = null;
-      ["patientsCard", "noticeCard", "intakesCard", "inviteCard"].forEach(id => $(id).classList.add("hidden"));
-      $("loginCard").classList.remove("hidden");
-      document.body.classList.remove("signed-in");
+      token = null; AppSession.logout("doctor", true);
     }
     throw new Error(typeof data?.detail === "string" ? data.detail : `请求失败（${response.status}）`);
   }
@@ -256,18 +253,13 @@ function patientCard(patient) {
 async function loadPatients() {
   try {
     const me = await api("/auth/me");
-    if (me.role !== "doctor") throw new Error("请使用医生账号登录医生工作台。");
+    if (me.role !== "doctor") { AppSession.logout("doctor"); return; }
     DoctorShell.setUser(me.display_name);
     const items = await api("/patients");
-    $("loginCard").classList.add("hidden");
     document.body.classList.add("signed-in");
     doctorPatients = items;
     renderPatients();
   } catch (error) {
-    sessionStorage.removeItem("doctorToken");
-    token = null;
-    document.body.classList.remove("signed-in");
-    $("loginCard").classList.remove("hidden");
     message(error.message, true);
   }
 }
@@ -380,26 +372,6 @@ async function loadCurrentNotice() {
   } catch (error) { message(error.message, true); }
 }
 
-$("loginForm").onsubmit = async (event) => {
-  event.preventDefault();
-  try {
-    const data = await api("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({
-        username: $("username").value,
-        password: $("password").value,
-      }),
-    });
-    token = data.access_token;
-    sessionStorage.setItem("doctorToken", token);
-    $("password").value = "";
-    await Promise.all([loadPatients(), loadCurrentNotice()]);
-    await activateDoctorView();
-  } catch (error) {
-    message(error.message, true);
-  }
-};
-
 $("newPatientForm").onsubmit = async (event) => {
   event.preventDefault();
   try {
@@ -467,8 +439,7 @@ $("revokeInvite").onclick = async () => {
   }
 };
 $("logout").onclick = () => {
-  sessionStorage.removeItem("doctorToken");
-  location.reload();
+  AppSession.logout("doctor");
 };
 $("closeInvite").onclick = () => $("inviteCard").classList.add("hidden");
 

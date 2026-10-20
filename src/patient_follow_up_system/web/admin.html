@@ -1,25 +1,27 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>测试账号管理</title><link rel="stylesheet" href="/static/app.css"></head>
-<body>
-<header><h1>患者随访 · 测试账号管理</h1><p>管理员入口</p></header>
-<main>
-  <section class="card" id="loginCard"><h2>管理员登录</h2>
-    <form id="loginForm" class="row"><input id="username" aria-label="管理员用户名" autocomplete="username" required><input id="password" aria-label="管理员密码" type="password" autocomplete="current-password" required><button>登录</button></form>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>平台管理 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261020-2"><link rel="stylesheet" href="/static/admin.css?v=20261020"></head>
+<body class="doctor-app signed-in admin-workspace" data-workspace-role="admin">
+<aside id="doctorSidebar" class="doctor-sidebar"></aside>
+<main class="doctor-main">
+  <div class="workspace-topbar"><div><p id="breadcrumb" class="breadcrumb">账号与访问 / 账号管理</p><h1 id="pageTitle">账号管理</h1></div><span class="trial-tag">管理员工作区 · 本地试用</span></div>
+  <section class="card hidden" id="accountsCard">
+    <div class="toolbar"><div><h2>测试账号</h2><p class="muted">管理医生和患者账号，维护账号的启用状态</p></div><div class="row"><button id="refresh" class="secondary">刷新</button><a class="buttonLink" href="#new-account">＋ 开通账号</a></div></div>
+    <div class="account-filters"><input id="accountSearch" type="search" aria-label="搜索账号或名称" placeholder="搜索账号或名称"><select id="roleFilter" aria-label="筛选账号类型"><option value="">全部类型</option><option value="doctor">医生</option><option value="patient">患者</option></select><select id="statusFilter" aria-label="筛选账号状态"><option value="">全部状态</option><option value="active">启用</option><option value="inactive">停用</option></select><span id="accountCounts" class="muted"></span></div>
+    <div class="account-table-wrap"><table class="account-table"><thead><tr><th scope="col">显示名称</th><th scope="col">登录账号</th><th scope="col">类型</th><th scope="col">状态</th><th scope="col">操作</th></tr></thead><tbody id="accounts"></tbody></table></div>
   </section>
-  <div id="workspace" class="hidden">
-    <section class="card"><div class="toolbar"><h2>开通测试账号</h2><button id="logout" class="secondary">退出</button></div>
-      <p>患者账号开通后，需通过医生提供的专属邀请认领档案。手机验证码将在后续任务中接入。</p>
-      <form id="accountForm" class="form-grid">
-        <label for="newUsername">用户名</label><input id="newUsername" pattern="[A-Za-z0-9_][A-Za-z0-9_.-]{2,49}" required placeholder="3–50 位字母、数字或 _ . -">
-        <label for="displayName">显示名称</label><input id="displayName" maxlength="100" required>
-        <label for="newPassword">初始密码</label><input id="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required>
-        <label for="role">账号类型</label><select id="role"><option value="doctor">医生</option><option value="patient">患者</option></select>
-        <button class="full-row">开通账号</button>
-      </form>
-    </section>
-    <section class="card"><div class="toolbar"><h2>账号与状态</h2><button id="refresh" class="secondary">刷新</button></div><div id="accounts"></div></section>
-  </div>
-  <p id="message" role="status" aria-live="polite"></p>
-</main><script src="/static/admin.js"></script>
+  <section class="card hidden" id="createAccountCard">
+    <div class="toolbar"><div><h2>开通测试账号</h2><p class="muted">填写账号信息，选择对应的工作区身份</p></div></div>
+    <form id="accountForm" class="form-grid admin-account-form">
+      <label for="newUsername">登录账号</label><input id="newUsername" pattern="[A-Za-z0-9_][A-Za-z0-9_.-]{2,49}" required placeholder="3–50 位字母、数字或 _ . -" autocomplete="off">
+      <label for="displayName">显示名称</label><input id="displayName" maxlength="100" required placeholder="请输入显示名称">
+      <label for="newPassword">初始密码</label><input id="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required placeholder="至少 8 位">
+      <label for="role">账号类型</label><select id="role"><option value="doctor">医生</option><option value="patient">患者</option></select>
+      <p class="muted full-row">患者账号开通后，通过医生提供的专属邀请认领档案。</p>
+      <div class="row full-row"><button>开通账号</button><a class="buttonLink secondary" href="#accounts">返回账号列表</a></div>
+    </form>
+  </section>
+  <section class="card hidden" id="placeholderCard"><div class="placeholder-content"><div><span class="placeholder-icon" aria-hidden="true">◷</span><h2 id="placeholderTitle"></h2><p id="placeholderDescription"></p><p>待建设</p></div></div></section>
+  <p id="message" class="hidden" role="status" aria-live="polite"></p>
+</main><script src="/static/session.js?v=20261020"></script><script src="/static/doctor-shell.js?v=20261020-3"></script><script src="/static/admin.js?v=20261020-3"></script>
 </body></html>

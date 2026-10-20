@@ -1,5 +1,5 @@
 const $ = id => document.getElementById(id);
-let token = sessionStorage.getItem("doctorToken");
+let token = AppSession.require("doctor");
 let current = null;
 let patients = [];
 let previewUrl = null;
@@ -11,7 +11,7 @@ function message(text, error=false) { $("message").textContent=text; $("message"
 async function api(path, options={}) {
   const response=await fetch(path,{...options,headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
   const data=await response.json();
-  if(!response.ok) throw new Error(response.status===401?"登录已失效或账号已停用，请返回医生工作台重新登录。":typeof data.detail==="string"?data.detail:"请检查输入内容");
+  if(!response.ok) {if(response.status===401) AppSession.logout("doctor",true);throw new Error(typeof data.detail==="string"?data.detail:"请检查输入内容");}
   return data;
 }
 function button(text, action) { const el=document.createElement("button"); el.type="button"; el.textContent=text; el.className="secondary"; el.onclick=async()=>{el.disabled=true;try{await action();}catch(e){message(e.message,true);}finally{el.disabled=false;}}; return el; }
@@ -99,8 +99,8 @@ bind("refresh",async()=>{await list();message("缓冲区已刷新；打开资料
 bind("openOriginal",async()=>{const response=await fetch(`/clinical-documents/${current.id}/file`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error("原件不可用或登录已失效");const url=URL.createObjectURL(await response.blob());window.open(url,"_blank","noopener");setTimeout(()=>URL.revokeObjectURL(url),60000);});
 bind("history",async()=>{const events=await api(`/clinical-documents/${current.id}/history`);$("historyText").textContent=JSON.stringify(events,null,2);$("historyText").classList.remove("hidden");});
 $("previewPage").onchange=()=>preview(Number($("previewPage").value));
-$("logout").onclick=()=>{sessionStorage.removeItem("doctorToken");location.href="/doctor";};
-async function init(){try{if(!token)throw new Error("请从左侧患者管理返回医生工作台登录。");const me=await api("/auth/me");if(me.role!=="doctor")throw new Error("请使用医生账号。");DoctorShell.setUser(me.display_name);patients=await api("/patients");await list();const params=new URLSearchParams(location.search);
+$("logout").onclick=()=>AppSession.logout("doctor");
+async function init(){try{if(!token)return;const me=await api("/auth/me");if(me.role!=="doctor"){AppSession.logout("doctor");return;}DoctorShell.setUser(me.display_name);patients=await api("/patients");await list();const params=new URLSearchParams(location.search);
   if(params.get("source")&&params.get("id")){const doc=await api("/clinical-documents/import",{method:"POST",body:JSON.stringify({source_kind:params.get("source"),source_id:Number(params.get("id"))})});await open(doc.id);await list();}
   else if(params.get("id"))await open(Number(params.get("id")));message("缓冲区候选不会自动绑定患者，请核对姓名及每项内容。");
 }catch(e){message(e.message,true);}}

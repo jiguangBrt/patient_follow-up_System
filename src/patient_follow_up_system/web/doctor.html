@@ -7,21 +7,10 @@
   <link rel="stylesheet" href="/static/app.css?v=20260911-5">
   <link rel="stylesheet" href="/static/doctor-shell.css?v=20261020-2">
 </head>
-<body class="doctor-app">
+<body class="doctor-app signed-in">
   <aside id="doctorSidebar" class="doctor-sidebar"></aside>
   <main class="doctor-main">
     <div class="workspace-topbar"><div><p id="breadcrumb" class="breadcrumb">诊疗管理 / 患者管理</p><h1 id="pageTitle">患者管理</h1></div><span class="trial-tag">试用环境 · 仅虚构或去标识化资料</span></div>
-    <section class="card" id="loginCard">
-      <h2>医生登录</h2>
-      <form id="loginForm" class="row">
-        <input id="username" autocomplete="username" placeholder="请输入医生用户名" aria-label="用户名">
-        <input id="password" type="password" autocomplete="current-password" placeholder="演示密码" aria-label="密码">
-        <button>登录</button>
-      </form>
-      <p class="muted">密码仅提交给本地后端，不会显示在页面。</p>
-      <p><a href="/admin">管理员 · 测试账号管理</a></p>
-    </section>
-
     <section class="card hidden" id="patientsCard">
       <div class="toolbar">
         <div><h2>患者列表</h2><p class="muted">管理我负责的患者档案与就诊资料</p></div>
@@ -87,7 +76,8 @@
     </section>
     <div id="message" class="status hidden" role="status" aria-live="polite"></div>
   </main>
-  <script src="/static/doctor-shell.js?v=20261020-2"></script>
-  <script src="/static/doctor.js?v=20261020-2"></script>
+  <script src="/static/session.js?v=20261020"></script>
+  <script src="/static/doctor-shell.js?v=20261020-3"></script>
+  <script src="/static/doctor.js?v=20261020-3"></script>
 </body>
 </html>

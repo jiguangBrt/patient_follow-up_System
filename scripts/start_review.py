@@ -141,15 +141,17 @@ def main():
                         display_name=label,
                         role=role,
                         password_hash=hash_password(
-                            DEMO_PASSWORD if name in legacy_names else "ReviewLocal2026!"
+                            DEMO_PASSWORD
+                            if name in legacy_names
+                            else "ReviewLocal2026!"
                         ),
                     )
                 )
         db.commit()
     create_samples()
     print(f"独立验收数据和虚构样例：{REVIEW_ROOT}", flush=True)
-    print(f"管理员：http://127.0.0.1:{args.port}/admin  账号 aaa001", flush=True)
-    print(f"医生：http://127.0.0.1:{args.port}/doctor  账号 ddd001", flush=True)
+    print(f"统一登录：http://127.0.0.1:{args.port}/", flush=True)
+    print("登录页选择管理员：账号 aaa001；选择医生：账号 ddd001", flush=True)
     print(f"管理员和医生初始密码：{DEMO_PASSWORD}（只用于本机隔离测试）", flush=True)
     if not args.prepare_only:
         import uvicorn
@@ -162,7 +164,7 @@ def main():
         if args.open_browser:
             threading.Thread(
                 target=open_when_ready,
-                args=(server, f"http://127.0.0.1:{args.port}/doctor"),
+                args=(server, f"http://127.0.0.1:{args.port}/"),
                 daemon=True,
             ).start()
         server.run()

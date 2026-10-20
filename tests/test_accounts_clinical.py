@@ -99,6 +99,24 @@ def auth(client, username="doctor"):
     return {"Authorization": "Bearer " + response.json()["access_token"]}
 
 
+@pytest.mark.parametrize("role", ["patient", "doctor", "admin"])
+def test_unified_login_checks_selected_role_before_issuing_a_token(env, role):
+    client, _, _ = env
+    payload = {"username": role, "password": PASSWORD, "role": role}
+    result = client.post("/auth/login", json=payload)
+    assert result.status_code == 200
+    headers = {"Authorization": "Bearer " + result.json()["access_token"]}
+    assert client.get("/auth/me", headers=headers).json()["role"] == role
+    wrong_role = "admin" if role != "admin" else "patient"
+    rejected = client.post("/auth/login", json=payload | {"role": wrong_role})
+    assert rejected.status_code == 403
+    assert "access_token" not in rejected.json()
+    bad_password = client.post(
+        "/auth/login", json=payload | {"password": "incorrect", "role": wrong_role}
+    )
+    assert bad_password.status_code == 401
+
+
 def png_bytes():
     output = io.BytesIO()
     Image.new("RGB", (300, 200), "white").save(output, format="PNG")
