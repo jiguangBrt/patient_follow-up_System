@@ -14,12 +14,14 @@ uv run python scripts/start_review.py
 
 | 入口 | 账号 | 初始密码 |
 | --- | --- | --- |
-| 管理员 `http://127.0.0.1:8010/admin` | `review_admin` | `ReviewLocal2026!` |
-| 医生 `http://127.0.0.1:8010/doctor` | `review_doctor` | `ReviewLocal2026!` |
+| 管理员 `http://127.0.0.1:8010/admin` | `aaa001` | `12345678` |
+| 医生 `http://127.0.0.1:8010/doctor` | `ddd001` | `12345678` |
 | 其他医生，验证访问范围 | `review_other_doctor` | `ReviewLocal2026!` |
 | 患者 `http://127.0.0.1:8010/patient` | `review_patient` | `ReviewLocal2026!` |
 
 账号仅为本机隔离验收使用。患者账号需认领档案后才能查看本人资料；如果验收环境里已经绑定过，可以在管理员页另建患者测试账号。
+
+首次运行新版脚本时，旧的 `review_admin` / `review_doctor` 会原地改为上述新账号并使用新密码，内部用户 ID、患者归属及审核记录不变。
 
 生成的样例位于 `.local/issue_8_10_review/`：
 

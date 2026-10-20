@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REVIEW_ROOT = ROOT / ".local" / "issue_8_10_review"
-DEMO_PASSWORD = "ReviewLocal2026!"
+DEMO_PASSWORD = "12345678"
 
 
 def create_samples():
@@ -104,27 +104,40 @@ def main():
     from patient_follow_up_system.models import User, UserRole
 
     with SessionLocal() as db:
+        legacy_names = {"aaa001": "review_admin", "ddd001": "review_doctor"}
         for name, label, role in [
-            ("review_admin", "虚构验收管理员", UserRole.ADMIN),
-            ("review_doctor", "虚构验收医生", UserRole.DOCTOR),
+            ("aaa001", "aaa001", UserRole.ADMIN),
+            ("ddd001", "ddd001", UserRole.DOCTOR),
             ("review_other_doctor", "虚构其他医生", UserRole.DOCTOR),
             ("review_patient", "虚构验收患者账号", UserRole.PATIENT),
         ]:
-            if db.scalar(select(User.id).where(User.username == name)) is None:
+            user = db.scalar(select(User).where(User.username == name))
+            if user is None and name in legacy_names:
+                user = db.scalar(
+                    select(User).where(User.username == legacy_names[name])
+                )
+                if user is not None:
+                    # Rename in place so patient ownership and review history keep their IDs.
+                    user.username = name
+                    user.display_name = label
+                    user.password_hash = hash_password(DEMO_PASSWORD)
+            if user is None:
                 db.add(
                     User(
                         username=name,
                         display_name=label,
                         role=role,
-                        password_hash=hash_password(DEMO_PASSWORD),
+                        password_hash=hash_password(
+                            DEMO_PASSWORD if name in legacy_names else "ReviewLocal2026!"
+                        ),
                     )
                 )
         db.commit()
     create_samples()
     print(f"独立验收数据和虚构样例：{REVIEW_ROOT}", flush=True)
-    print(f"管理员：http://127.0.0.1:{args.port}/admin  账号 review_admin", flush=True)
-    print(f"医生：http://127.0.0.1:{args.port}/doctor  账号 review_doctor", flush=True)
-    print(f"虚构验收账号初始密码：{DEMO_PASSWORD}（只用于本机隔离测试）", flush=True)
+    print(f"管理员：http://127.0.0.1:{args.port}/admin  账号 aaa001", flush=True)
+    print(f"医生：http://127.0.0.1:{args.port}/doctor  账号 ddd001", flush=True)
+    print(f"管理员和医生初始密码：{DEMO_PASSWORD}（只用于本机隔离测试）", flush=True)
     if not args.prepare_only:
         import uvicorn
 
