@@ -27,6 +27,7 @@ from patient_follow_up_system.auth import (
     require_env,
     require_roles,
 )
+from patient_follow_up_system.link_urls import patient_link_token, public_base_url
 from patient_follow_up_system.database import get_db
 from patient_follow_up_system.invitations import (
     MAX_FAILED_VERIFICATION_ATTEMPTS,
@@ -164,6 +165,11 @@ class InvitationStatusResponse(BaseModel):
     state: InvitationState
 
 
+class IntakeStatusResponse(InvitationStatusResponse):
+    locked_name: str | None = None
+    profile: dict | None = None
+
+
 class InvitationBindRequest(BaseModel):
     invitation_token: str = Field(min_length=20, max_length=128)
     verification_code: str = Field(
@@ -198,7 +204,9 @@ class IntakeLinkCreateResponse(BaseModel):
     intake_token: str
     intake_url: str
     qr_svg: str
-    expires_at: datetime
+    expires_at: datetime | None
+    display_name: str | None = None
+    state: InvitationState = InvitationState.AVAILABLE
 
 
 class IntakeTokenRequest(BaseModel):
@@ -213,9 +221,13 @@ class IntakeSubmissionRequest(IntakeTokenRequest):
     operator_relationship: str = Field(pattern=r"^(本人|家属协助)$")
     notice_version_id: int = Field(ge=1)
     consent_given: bool
-    document_name: str = Field(min_length=1, max_length=255)
-    document_mime_type: str = Field(pattern=r"^(image/jpeg|image/png|application/pdf)$")
-    document_base64: str = Field(min_length=4, max_length=11_000_000)
+    document_name: str | None = Field(default=None, min_length=1, max_length=255)
+    document_mime_type: str | None = Field(
+        default=None, pattern=r"^(image/jpeg|image/png|application/pdf)$"
+    )
+    document_base64: str | None = Field(
+        default=None, min_length=4, max_length=11_000_000
+    )
 
 
 class IntakeSubmissionResponse(BaseModel):
@@ -770,7 +782,7 @@ def create_patient_invitation(
         invitation,
         invitation_token,
         verification_code,
-        str(http_request.base_url),
+        public_base_url(http_request),
     )
 
 
@@ -993,6 +1005,89 @@ def intake_submission_response(
     )
 
 
+def intake_link_state(link: PatientIntakeLink) -> InvitationState:
+    if link.revoked_at is not None:
+        return InvitationState.REVOKED
+    if link.patient_id is not None and link.access_nonce:
+        return InvitationState.AVAILABLE
+    if link.expires_at <= utc_for_sqlite(datetime.now(UTC)):
+        return InvitationState.EXPIRED
+    if link.used_count >= link.max_submissions:
+        return InvitationState.EXHAUSTED
+    return InvitationState.AVAILABLE
+
+
+def patient_qr_response(link, patient, http_request):
+    token = patient_link_token(link.access_nonce)
+    url = f"{public_base_url(http_request)}/intake#token={token}"
+    return IntakeLinkCreateResponse(
+        id=link.id,
+        intake_token=token,
+        intake_url=url,
+        qr_svg=invitation_qr_svg(url),
+        expires_at=None,
+        display_name=patient.display_name,
+        state=intake_link_state(link),
+    )
+
+
+@app.post("/patients/{patient_id}/intake-link", response_model=IntakeLinkCreateResponse)
+def patient_intake_link(
+    patient_id: int,
+    http_request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+):
+    patient = accessible_patient_or_404(db, patient_id, current_user)
+    link = db.scalar(
+        select(PatientIntakeLink).where(PatientIntakeLink.patient_id == patient.id)
+    )
+    if link is None:
+        nonce = secrets.token_urlsafe(32)
+        link = PatientIntakeLink(
+            patient_id=patient.id,
+            access_nonce=nonce,
+            token_digest=digest_invitation_token(patient_link_token(nonce)),
+            created_by_doctor_id=current_user.id,
+            expires_at=datetime(9999, 1, 1),
+        )
+        db.add(link)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            link = db.scalar(
+                select(PatientIntakeLink).where(
+                    PatientIntakeLink.patient_id == patient.id
+                )
+            )
+            if link is None:
+                raise HTTPException(409, "生成二维码发生冲突，请重试。")
+    return patient_qr_response(link, patient, http_request)
+
+
+@app.get(
+    "/patients/{patient_id}/intake-submissions",
+    response_model=list[IntakeSubmissionResponse],
+)
+def patient_intake_submissions(
+    patient_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+):
+    accessible_patient_or_404(db, patient_id, current_user)
+    rows = db.scalars(
+        select(PatientIntakeSubmission)
+        .join(
+            PatientIntakeLink,
+            PatientIntakeSubmission.intake_link_id == PatientIntakeLink.id,
+        )
+        .where(PatientIntakeLink.patient_id == patient_id)
+        .order_by(PatientIntakeSubmission.id.desc())
+    ).all()
+    return [intake_submission_response(row, db) for row in rows]
+
+
 @app.post("/intake-links", response_model=IntakeLinkCreateResponse, status_code=201)
 def create_intake_link(
     http_request: Request,
@@ -1009,7 +1104,7 @@ def create_intake_link(
     db.add(link)
     db.commit()
     db.refresh(link)
-    url = f"{str(http_request.base_url).rstrip('/')}/intake#token={token}"
+    url = f"{public_base_url(http_request)}/intake#token={token}"
     return IntakeLinkCreateResponse(
         id=link.id,
         intake_token=token,
@@ -1019,23 +1114,46 @@ def create_intake_link(
     )
 
 
-@app.post("/intake-links/status", response_model=InvitationStatusResponse)
+@app.post("/intake-links/status", response_model=IntakeStatusResponse)
 def read_intake_link_status(
     request: IntakeTokenRequest,
     db: Annotated[Session, Depends(get_db)],
-) -> InvitationStatusResponse:
-    link = db.scalar(select(PatientIntakeLink).where(PatientIntakeLink.token_digest == digest_invitation_token(request.intake_token)))
+) -> IntakeStatusResponse:
+    link = db.scalar(
+        select(PatientIntakeLink).where(
+            PatientIntakeLink.token_digest
+            == digest_invitation_token(request.intake_token)
+        )
+    )
     if link is None:
-        return InvitationStatusResponse(state=InvitationState.UNAVAILABLE)
-    now = utc_for_sqlite(datetime.now(UTC))
-    state = InvitationState.AVAILABLE
-    if link.revoked_at is not None:
-        state = InvitationState.REVOKED
-    elif link.expires_at <= now:
-        state = InvitationState.EXPIRED
-    elif link.used_count >= link.max_submissions:
-        state = InvitationState.EXHAUSTED
-    return InvitationStatusResponse(state=state)
+        return IntakeStatusResponse(state=InvitationState.UNAVAILABLE)
+    state = intake_link_state(link)
+    if state != InvitationState.AVAILABLE:
+        return IntakeStatusResponse(state=state)
+    patient = db.get(Patient, link.patient_id) if link.patient_id else None
+    latest = (
+        db.scalar(
+            select(PatientIntakeSubmission)
+            .where(PatientIntakeSubmission.intake_link_id == link.id)
+            .order_by(PatientIntakeSubmission.id.desc())
+        )
+        if patient
+        else None
+    )
+    return IntakeStatusResponse(
+        state=state,
+        locked_name=patient.display_name if patient else None,
+        profile=(
+            {
+                "sex": latest.sex,
+                "date_of_birth": latest.date_of_birth.isoformat(),
+                "operator_relationship": latest.operator_relationship,
+                "has_document": bool(latest.document_storage_name),
+            }
+            if latest
+            else None
+        ),
+    )
 
 
 @app.post("/intake-links/{link_id}/revoke", response_model=InvitationRevokeResponse)
@@ -1060,9 +1178,14 @@ def submit_intake(
 ) -> IntakeSubmissionResponse:
     link = db.scalar(select(PatientIntakeLink).where(PatientIntakeLink.token_digest == digest_invitation_token(request.intake_token)))
     now = utc_for_sqlite(datetime.now(UTC))
-    if link is None or link.revoked_at is not None or link.expires_at <= now or link.used_count >= link.max_submissions:
+    if link is None or intake_link_state(link) != InvitationState.AVAILABLE:
         raise unavailable_invitation()
-    submission_digest = digest_invitation_token(request.submission_key)
+    patient = db.get(Patient, link.patient_id) if link.patient_id else None
+    if patient and request.display_name != patient.display_name:
+        raise HTTPException(422, "患者姓名由医生设定，不能修改。")
+    if request.date_of_birth > date.today():
+        raise HTTPException(422, "出生日期不能晚于今天。")
+    submission_digest = digest_invitation_token(request.intake_token + ":" + request.submission_key)
     existing = db.scalar(select(PatientIntakeSubmission).where(PatientIntakeSubmission.submission_digest == submission_digest))
     if existing is not None:
         return intake_submission_response(existing, db)
@@ -1074,24 +1197,17 @@ def submit_intake(
             status_code=409,
             detail="患者须知已更新或不可用，请重新阅读当前版本后再提交。",
         )
-    try:
-        document_bytes = base64.b64decode(request.document_base64, validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise HTTPException(status_code=422, detail="Document data is invalid.") from exc
-    if not document_bytes or len(document_bytes) > 8 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Document must be 8 MB or smaller.")
-    signatures = {
-        "image/jpeg": document_bytes.startswith(b"\xff\xd8\xff"),
-        "image/png": document_bytes.startswith(b"\x89PNG\r\n\x1a\n"),
-        "application/pdf": document_bytes.startswith(b"%PDF-"),
-    }
-    if not signatures[request.document_mime_type]:
-        raise HTTPException(status_code=422, detail="Document type does not match its content.")
-    upload_root = Path(os.getenv("INTAKE_UPLOAD_DIR", ".local/intake_uploads"))
-    upload_root.mkdir(parents=True, exist_ok=True)
-    suffix = {"image/jpeg": ".jpg", "image/png": ".png", "application/pdf": ".pdf"}[request.document_mime_type]
-    storage_name = f"{secrets.token_hex(24)}{suffix}"
-    (upload_root / storage_name).write_bytes(document_bytes)
+    document_fields = {}
+    parts = (request.document_name, request.document_mime_type, request.document_base64)
+    if any(part is not None for part in parts):
+        if not all(parts):
+            raise HTTPException(422, "请完整提供资料名称、类型和文件内容，或暂不上传。")
+        document_bytes, suffix = decode_uploaded_document(request.document_base64, request.document_mime_type)
+        upload_root = Path(os.getenv("INTAKE_UPLOAD_DIR", ".local/intake_uploads"))
+        upload_root.mkdir(parents=True, exist_ok=True)
+        storage_name = f"{secrets.token_hex(24)}{suffix}"
+        (upload_root / storage_name).write_bytes(document_bytes)
+        document_fields = dict(document_name=Path(request.document_name).name, document_mime_type=request.document_mime_type, document_storage_name=storage_name, document_sha256=hashlib.sha256(document_bytes).hexdigest())
     submission = PatientIntakeSubmission(
         intake_link_id=link.id,
         submission_digest=submission_digest,
@@ -1101,20 +1217,19 @@ def submit_intake(
         operator_relationship=request.operator_relationship,
         notice_version=notice.version,
         consented_at=utc_for_sqlite(datetime.now(UTC)),
-        document_name=Path(request.document_name).name,
-        document_mime_type=request.document_mime_type,
-        document_storage_name=storage_name,
-        document_sha256=hashlib.sha256(document_bytes).hexdigest(),
+        **document_fields,
     )
-    link.used_count += 1
+    if link.patient_id is None:
+        link.used_count += 1
     db.add(submission)
     db.flush()
     db.add(
         PatientDemoConsent(
             notice_version_id=notice.id,
             intake_submission_id=submission.id,
+            patient_id=link.patient_id,
             consented_at=submission.consented_at,
-            context="anonymous-intake-web",
+            context="patient-qr-web" if link.patient_id else "anonymous-intake-web",
             notice_content_sha256=notice.content_sha256,
         )
     )
@@ -1177,19 +1292,18 @@ def review_intake_submission(
     if request.action == "reject":
         submission.status = "rejected"
     else:
-        if not submission.notice_version or not submission.document_storage_name:
+        if not submission.notice_version:
             raise HTTPException(status_code=409, detail="Submission is incomplete and cannot be approved.")
-        patient = Patient(
-            patient_code=generate_record_code(db, Patient, Patient.patient_code, "P"),
-            display_name=submission.display_name,
-            responsible_doctor_id=current_user.id,
-        )
-        db.add(patient)
-        try:
+        link = db.get(PatientIntakeLink, submission.intake_link_id)
+        patient = db.get(Patient, link.patient_id) if link.patient_id else None
+        if patient is None:
+            patient = Patient(
+                patient_code=generate_record_code(db, Patient, Patient.patient_code, "P"),
+                display_name=submission.display_name,
+                responsible_doctor_id=current_user.id,
+            )
+            db.add(patient)
             db.flush()
-        except IntegrityError as exc:
-            db.rollback()
-            raise HTTPException(status_code=409, detail="系统生成患者编号时发生冲突，请重试。") from exc
         submission.status = "approved"
         submission.created_patient_id = patient.id
     submission.reviewed_by_doctor_id = current_user.id

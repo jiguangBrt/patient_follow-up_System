@@ -227,6 +227,8 @@ class PatientIntakeLink(Base):
     token_digest: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
     created_by_doctor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
+    patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), unique=True, nullable=True)
+    access_nonce: Mapped[str | None] = mapped_column(String(64), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     max_submissions: Mapped[int] = mapped_column(Integer, default=100, server_default="100", nullable=False)
     used_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
@@ -256,7 +258,7 @@ class PatientIntakeSubmission(Base):
     reviewed_by_doctor_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    created_patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), unique=True, nullable=True)
+    created_patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), nullable=True)
 
 
 class PatientNoticeVersion(Base):

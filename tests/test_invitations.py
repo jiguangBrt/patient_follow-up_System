@@ -157,6 +157,166 @@ def test_verification_code_is_six_digits_for_mobile_entry() -> None:
     )
 
 
+def test_patient_qr_reprints_repeats_locks_name_and_revokes(
+    invitation_app, monkeypatch
+):
+    monkeypatch.setenv("AUTH_SECRET_KEY", "test-persistent-patient-link-secret")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "http://10.1.2.3:8011")
+    client, sessions, ids, actor = invitation_app
+    path = f"/patients/{ids['patient'].id}/intake-link"
+    qr = client.post(path).json()
+    assert qr["intake_url"].startswith("http://10.1.2.3:8011/intake#token=")
+    assert qr["expires_at"] is None
+    assert "verification_code" not in qr
+    assert client.post(path).json()["intake_url"] == qr["intake_url"]
+    actor["value"] = ids["other_doctor"]
+    assert client.post(path).status_code == 404
+    assert client.post(f"/intake-links/{qr['id']}/revoke").status_code == 404
+    actor["value"] = ids["patient_user"]
+    assert client.post(path).status_code == 403
+    actor["value"] = ids["doctor"]
+    with sessions() as db:
+        link = db.get(PatientIntakeLink, qr["id"])
+        link.expires_at = datetime(2000, 1, 1)
+        link.used_count = link.max_submissions
+        db.commit()
+    for _ in range(12):
+        state = client.post(
+            "/intake-links/status", json={"intake_token": qr["intake_token"]}
+        ).json()
+        assert state["state"] == "available"
+        assert state["locked_name"] == ids["patient"].display_name
+    payload = dict(
+        intake_token=qr["intake_token"],
+        submission_key="first-submission-key-123456",
+        display_name=ids["patient"].display_name,
+        sex="女",
+        date_of_birth="1973-01-02",
+        operator_relationship="本人",
+        notice_version_id=ids["notice"].id,
+        consent_given=True,
+    )
+    assert (
+        client.post(
+            "/intake-submissions", json=payload | {"display_name": "篡改姓名"}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/intake-submissions", json=payload | {"consent_given": False}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/intake-submissions", json=payload | {"notice_version_id": 999}
+        ).status_code
+        == 409
+    )
+    assert (
+        client.post(
+            "/intake-submissions", json=payload | {"date_of_birth": "2999-01-01"}
+        ).status_code
+        == 422
+    )
+    result = client.post("/intake-submissions", json=payload)
+    assert result.status_code == 201
+    assert result.json()["has_document"] is False
+    assert (
+        client.post("/intake-submissions", json=payload).json()["id"]
+        == result.json()["id"]
+    )
+    approved = client.post(
+        f"/intake-submissions/{result.json()['id']}/review", json={"action": "approve"}
+    )
+    assert approved.status_code == 200
+    assert approved.json()["created_patient_id"] == ids["patient"].id
+    followup = payload | dict(
+        submission_key="later-upload-key-1234567890",
+        document_name="later.png",
+        document_mime_type="image/png",
+        document_base64="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+    )
+    later = client.post("/intake-submissions", json=followup)
+    assert later.status_code == 201 and later.json()["has_document"]
+    assert (
+        client.get(f"/intake-submissions/{later.json()['id']}/document").status_code
+        == 200
+    )
+    assert (
+        client.post(
+            f"/intake-submissions/{later.json()['id']}/review",
+            json={"action": "approve"},
+        ).json()["created_patient_id"]
+        == ids["patient"].id
+    )
+    assert (
+        len(client.get(f"/patients/{ids['patient'].id}/intake-submissions").json()) == 2
+    )
+    actor["value"] = ids["other_doctor"]
+    assert (
+        client.get(f"/patients/{ids['patient'].id}/intake-submissions").status_code
+        == 404
+    )
+    actor["value"] = ids["doctor"]
+    client.post(f"/intake-links/{qr['id']}/revoke")
+    state = client.post(
+        "/intake-links/status", json={"intake_token": qr["intake_token"]}
+    ).json()
+    assert (
+        state["state"] == "revoked"
+        and state["locked_name"] is None
+        and state["profile"] is None
+    )
+    assert client.post("/intake-submissions", json=followup).status_code == 410
+    assert client.post(path).json()["state"] == "revoked"
+
+
+def test_generic_intake_accepts_no_file_but_rejects_partial_or_invalid_files(
+    invitation_app,
+):
+    client, _, ids, _ = invitation_app
+    qr = client.post("/intake-links").json()
+    payload = dict(
+        intake_token=qr["intake_token"],
+        submission_key="optional-document-key-12345",
+        display_name="虚构患者",
+        sex="男",
+        date_of_birth="1980-01-01",
+        operator_relationship="家属协助",
+        notice_version_id=ids["notice"].id,
+        consent_given=True,
+    )
+    assert (
+        client.post(
+            "/intake-submissions", json=payload | {"document_name": "partial.png"}
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/intake-submissions",
+            json=payload
+            | {
+                "document_name": "bad.png",
+                "document_mime_type": "image/png",
+                "document_base64": "YWJjZA==",
+            },
+        ).status_code
+        == 422
+    )
+    result = client.post("/intake-submissions", json=payload)
+    assert result.status_code == 201 and not result.json()["has_document"]
+    assert (
+        client.post(
+            f"/intake-submissions/{result.json()['id']}/review",
+            json={"action": "approve"},
+        ).status_code
+        == 200
+    )
+
+
 def test_create_status_bind_and_repeat_are_safe(invitation_app) -> None:
     client, session_factory, identities, current_user = invitation_app
     result = create_invitation(

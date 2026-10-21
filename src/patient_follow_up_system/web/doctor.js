@@ -84,7 +84,7 @@ async function showPatientDetails(patient, details) {
     detailLine("建档时间", new Date(patient.created_at).toLocaleString()),
   );
   const detailActions = document.createElement("div"); detailActions.className = "patient-detail-actions";
-  detailActions.append(actionButton("新增就诊", () => openEncounterForm(patient), true), actionButton("生成专属邀请", () => createInvite(patient.id)));
+  detailActions.append(actionButton("新增就诊", () => openEncounterForm(patient), true), actionButton("查看 / 重印建档二维码", () => createInvite(patient.id)));
   details.prepend(detailActions);
   try {
     const [encounters, documents, clinicalRecords] = await Promise.all([
@@ -94,6 +94,18 @@ async function showPatientDetails(patient, details) {
     ]);
     const clinicalHeading = document.createElement("h4");
     clinicalHeading.textContent = "结构化病历档案（医生已确认）";
+    const intakeHistory = await api(`/patients/${patient.id}/intake-submissions`);
+    if (intakeHistory.length) {
+      const latest = intakeHistory[0];
+      details.append(detailLine("患者基本信息", `${latest.sex} · 生日 ${latest.date_of_birth} · 操作员 ${latest.operator_relationship}`));
+      details.append(detailLine("患者须知", `${latest.notice_version} · ${new Date(latest.consented_at).toLocaleString()}`));
+      intakeHistory.forEach(row => {
+        if (!row.has_document) return;
+        const upload = document.createElement("div"); upload.className="timeline-item";
+        upload.append(detailLine("扫码补交资料", new Date(row.created_at).toLocaleString()), actionButton("查看原件", () => openIntakeDocument(row.id), true), actionButton("识别并逐字段审核", () => {location.href=`/clinical?source=intake&id=${row.id}`;}, true));
+        details.append(upload);
+      });
+    }
     details.append(clinicalHeading);
     if (!clinicalRecords.length) details.append(detailLine("病历记录", "暂无已确认入档内容"));
     clinicalRecords.forEach(record => {
@@ -134,7 +146,7 @@ async function showPatientDetails(patient, details) {
         meta.className = "muted";
         meta.textContent = `${encounter.encounter_code} · ${new Date(encounter.occurred_at).toLocaleString()}`;
         text.append(title, meta);
-        item.append(text, actionButton("为本次就诊生成邀请", () => createInvite(patient.id, encounter.id), true));
+        item.append(text, actionButton("查看患者建档二维码", () => createInvite(patient.id, encounter.id), true));
         details.append(item);
       });
     }
@@ -234,8 +246,8 @@ function patientCard(patient) {
   code.textContent = patient.patient_code;
   const badge = document.createElement("span");
   badge.className = `badge ${patient.is_bound ? "bound" : "unbound"}`;
-  badge.textContent = patient.is_bound ? "已关联患者账号" : "尚未关联患者账号";
-  badge.title = patient.is_bound ? "患者可使用自己的账号访问该档案" : "档案已建立，等待患者通过专属邀请认领";
+  badge.textContent = "患者专属档案";
+  badge.title = "请通过专属建档二维码填写基本信息";
   text.append(name, code);
   const actions = document.createElement("div");
   actions.className = "row patient-actions";
@@ -243,6 +255,7 @@ function patientCard(patient) {
   details.className = "patient-details hidden";
   actions.append(
     actionButton("查看档案 →", () => showPatientDetails(patient, details), true),
+    actionButton("建档二维码 / 重印", () => createInvite(patient.id)),
   );
   const binding = document.createElement("div"); binding.append(badge);
   summary.append(text, binding, actions);
@@ -276,19 +289,17 @@ function openEncounterForm(patient) {
 
 async function createInvite(patientId, encounterId = null) {
   try {
-    const data = await api(`/patients/${patientId}/invitations`, {
-      method: "POST",
-      body: JSON.stringify({
-        encounter_id: encounterId,
-        expires_in_minutes: 60,
-        max_uses: 1,
-      }),
-    });
+    const data = await api(`/patients/${patientId}/intake-link`, {method:"POST"});
     currentInvitationId = data.id;
     $("qr").innerHTML = data.qr_svg;
-    $("code").textContent = data.verification_code;
-    $("openInvite").href = data.invitation_url;
-    $("expiry").textContent = `有效期至 ${new Date(data.expires_at).toLocaleString()}`;
+    $("qrPatientName").textContent = data.display_name;
+    $("openInvite").href = data.intake_url;
+    $("qrUrl").textContent = data.intake_url;
+    const revoked = data.state !== "available";
+    $("expiry").textContent = revoked ? "此码已停用，患者无法继续使用。" : "长期有效 · 可重复扫码 · 无需核验码";
+    $("printInvite").disabled = revoked;
+    $("revokeInvite").disabled = revoked;
+    $("openInvite").classList.toggle("hidden", revoked);
     $("inviteCard").classList.remove("hidden");
     $("inviteCard").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
@@ -339,7 +350,7 @@ async function loadIntakes() {
       const item = document.createElement("article");
       item.className = "patient-card-wide";
       item.append(
-        detailLine("演示称呼", submission.display_name),
+        detailLine("患者姓名", submission.display_name),
         detailLine("基本信息", `${submission.sex} · ${submission.date_of_birth} · ${submission.operator_relationship}`),
         detailLine("状态", submission.status),
         detailLine("演示同意", submission.consented_at ? `${submission.notice_version} · ${new Date(submission.consented_at).toLocaleString()}${submission.consent_is_legacy_incomplete ? " · 历史内容快照不完整" : ""}` : "未记录"),
@@ -358,7 +369,7 @@ async function loadIntakes() {
       }
       return item;
     }));
-    if (!items.length) $("intakes").textContent = "暂无建档申请。可生成通用建档二维码，供新患者提交资料。";
+    if (!items.length) $("intakes").textContent = "暂无建档申请。请在患者管理中先录入姓名，再生成患者专属建档码。";
   } catch (error) {
     message(error.message, true);
   }
@@ -375,7 +386,7 @@ async function loadCurrentNotice() {
 $("newPatientForm").onsubmit = async (event) => {
   event.preventDefault();
   try {
-    await api("/patients", {
+    const patient = await api("/patients", {
       method: "POST",
       body: JSON.stringify({
         display_name: $("patientName").value.trim(),
@@ -383,8 +394,9 @@ $("newPatientForm").onsubmit = async (event) => {
     });
     event.target.reset();
     $("newPatientCard").classList.add("hidden");
-    message("患者已建档，系统已自动生成患者编号");
+    message("已保存医生设定的姓名，可打印专属建档二维码");
     await loadPatients();
+    await createInvite(patient.id);
   } catch (error) {
     message(error.message, true);
   }
@@ -411,7 +423,7 @@ $("encounterForm").onsubmit = async (event) => {
 };
 
 $("showNewPatient").onclick = () => { $("newPatientCard").classList.remove("hidden"); $("newPatientCard").scrollIntoView({behavior:"smooth",block:"start"}); };
-$("createIntakeLink").onclick = createIntakeLink;
+$("createIntakeLink").onclick = () => {location.hash="patients"; message("请点击新增患者，录入姓名后生成专属码。");};
 $("refreshIntakes").onclick = loadIntakes;
 $("patientSearch").oninput = renderPatients;
 window.addEventListener("hashchange", activateDoctorView);
@@ -431,9 +443,9 @@ $("cancelEncounter").onclick = () => $("encounterCard").classList.add("hidden");
 $("revokeInvite").onclick = async () => {
   if (!currentInvitationId) return;
   try {
-    await api(`/invitations/${currentInvitationId}/revoke`, { method: "POST" });
+    await api(`/intake-links/${currentInvitationId}/revoke`, { method: "POST" });
     $("inviteCard").classList.add("hidden");
-    message("邀请已撤销");
+    message("患者建档二维码已停用，已打印的二维码也无法继续使用");
   } catch (error) {
     message(error.message, true);
   }
@@ -441,6 +453,7 @@ $("revokeInvite").onclick = async () => {
 $("logout").onclick = () => {
   AppSession.logout("doctor");
 };
+$("printInvite").onclick = () => window.print();
 $("closeInvite").onclick = () => $("inviteCard").classList.add("hidden");
 
 if (token) Promise.all([loadPatients(), loadCurrentNotice()]).then(activateDoctorView);

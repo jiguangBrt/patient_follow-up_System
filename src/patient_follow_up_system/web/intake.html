@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>新患者建档申请</title><link rel="stylesheet" href="/static/app.css?v=20260911-5"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>患者建档</title><link rel="stylesheet" href="/static/app.css?v=20260911-5"></head>
 <body class="patient-page">
-  <header class="patient-header"><h1>新患者建档申请</h1><p>手机填写 · 医生审核后才正式建档</p></header>
+  <header class="patient-header"><h1>患者建档</h1><p>专属二维码 · 姓名由医生设定</p></header>
   <main class="mobile"><section class="card patient-card">
     <p class="step-label" id="stepLabel">第 1 步，共 2 步</p><h2 id="pageTitle">阅读患者须知</h2>
     <div id="status" class="status" role="status">正在检查二维码…</div>
@@ -15,18 +15,18 @@
       <button id="continueButton" type="button" disabled>同意并继续填写</button>
     </section>
     <form id="intakeForm" class="patient-form hidden">
-      <p class="plain-help">只填写最少信息，纸质病历直接拍照，不需要逐项抄写。</p>
-      <label for="displayName">演示称呼</label><input id="displayName" required maxlength="100" placeholder="例如 虚构患者丙">
+      <p class="plain-help">请填写基本信息。病历可以现在上传，也可以日后再次扫码补交。</p>
+      <label for="displayName">患者姓名</label><input id="displayName" required maxlength="100" placeholder="例如 虚构患者丙">
       <label for="sex">性别</label><select id="sex"><option>男</option><option>女</option><option>未说明</option></select>
       <label for="dateOfBirth">出生日期</label><input id="dateOfBirth" type="date" required>
-      <label for="relationship">操作人</label><select id="relationship"><option>本人</option><option>家属协助</option></select>
-      <label for="document">纸质病历或报告</label><input id="document" type="file" accept="image/jpeg,image/png,application/pdf" capture="environment" required>
+      <label for="relationship">操作员</label><select id="relationship"><option>本人</option><option>家属协助</option></select>
+      <label for="document">纸质病历或报告（选填）</label><input id="document" type="file" accept="image/jpeg,image/png,application/pdf" capture="environment">
       <img id="preview" class="document-preview hidden" alt="待提交资料预览">
       <p id="fileHelp" class="muted">支持 JPG、PNG 或 PDF，最大 8 MB。请只使用虚构或去标识化资料。</p>
       <p class="muted">试用阶段请勿填写真实姓名、手机号、证件号、病案号或真实临床信息。</p>
       <button id="submitButton" type="submit">提交给医生审核</button>
     </form>
-    <div id="done" class="completion hidden"><div class="completion-mark">✓</div><h3>资料已提交审核</h3><p id="consentReceipt"></p><p>原件已经保存。系统尚未执行真实 OCR；医生审核通过后才会进入正式患者库。</p></div>
+    <div id="done" class="completion hidden"><div class="completion-mark">✓</div><h3>信息已提交</h3><p id="consentReceipt"></p><p>基本信息已保存；如有上传，原件也已保存。医生核对后处理资料。您可以随时再次扫码补交病历。</p><button id="submitMore" type="button">继续补交病历</button></div>
     <aside class="care-note"><strong>请注意</strong><p>本页面不是正式医疗身份认证，也不提供诊断、处方或急救服务。</p></aside>
-  </section></main><script src="/static/intake.js?v=20260911-2"></script>
+  </section></main><script src="/static/intake.js?v=20261021-1"></script>
 </body></html>
