@@ -21,6 +21,16 @@ uv run python scripts/start_review.py
 | 其他医生，验证访问范围 | `review_other_doctor` | `ReviewLocal2026!` |
 | 统一登录页 → 患者 | `review_patient` | `ReviewLocal2026!` |
 
+### 手机开热点、电脑连接热点时
+
+手机可尝试直接访问电脑在热点中的 IPv4 地址。启动脚本默认只允许本机访问；需要手机测试时，另开 PowerShell，指定电脑 WLAN 的 IPv4 地址：
+
+```powershell
+uv run python scripts/start_review.py --host <电脑的热点IPv4地址> --port 8011
+```
+
+保持窗口运行，在手机浏览器打开 `http://<电脑的热点IPv4地址>:8011/`。热点重连后地址可能变化，应重新查看电脑的 `ipconfig`。此入口沿用同一验收库；停止该命令即可关闭。部分手机热点或 Windows 防火墙会阻止访问，电脑上检查成功并不代表手机一定能连通。
+
 账号仅为本机隔离验收使用。患者账号需认领档案后才能查看本人资料；如果验收环境里已经绑定过，可以在管理员页另建患者测试账号。
 
 首次运行新版脚本时，旧的 `review_admin` / `review_doctor` 会原地改为上述新账号并使用新密码，内部用户 ID、患者归属及审核记录不变。

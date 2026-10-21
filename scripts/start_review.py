@@ -87,6 +87,11 @@ def create_samples():
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="监听地址，手机测试时指定电脑的热点 IPv4 地址",
+    )
     parser.add_argument("--port", type=int, default=8010)
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--open-browser", action="store_true")
@@ -150,7 +155,7 @@ def main():
         db.commit()
     create_samples()
     print(f"独立验收数据和虚构样例：{REVIEW_ROOT}", flush=True)
-    print(f"统一登录：http://127.0.0.1:{args.port}/", flush=True)
+    print(f"统一登录：http://{args.host}:{args.port}/", flush=True)
     print("登录页选择管理员：账号 aaa001；选择医生：账号 ddd001", flush=True)
     print(f"管理员和医生初始密码：{DEMO_PASSWORD}（只用于本机隔离测试）", flush=True)
     if not args.prepare_only:
@@ -158,13 +163,13 @@ def main():
 
         server = uvicorn.Server(
             uvicorn.Config(
-                "patient_follow_up_system.main:app", host="127.0.0.1", port=args.port
+                "patient_follow_up_system.main:app", host=args.host, port=args.port
             )
         )
         if args.open_browser:
             threading.Thread(
                 target=open_when_ready,
-                args=(server, f"http://127.0.0.1:{args.port}/"),
+                args=(server, f"http://{args.host}:{args.port}/"),
                 daemon=True,
             ).start()
         server.run()
