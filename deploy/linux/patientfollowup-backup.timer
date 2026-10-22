@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily patient follow-up backup
+
+[Timer]
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=600
+Persistent=true
+
+[Install]
+WantedBy=timers.target
