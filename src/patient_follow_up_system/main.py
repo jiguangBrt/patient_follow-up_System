@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from openai import APIError, OpenAI
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -169,6 +169,9 @@ class InvitationStatusResponse(BaseModel):
 class IntakeStatusResponse(InvitationStatusResponse):
     locked_name: str | None = None
     profile: dict | None = None
+    submission_status: str | None = None
+    submitted_at: datetime | None = None
+    review_note: str | None = None
 
 
 class InvitationBindRequest(BaseModel):
@@ -1117,6 +1120,18 @@ def create_intake_link(
     )
 
 
+def latest_patient_submission(db: Session, link_id: int):
+    # Historical duplicate requests may exist; an unresolved request takes priority.
+    return db.scalar(
+        select(PatientIntakeSubmission)
+        .where(PatientIntakeSubmission.intake_link_id == link_id)
+        .order_by(
+            (PatientIntakeSubmission.status == "pending").desc(),
+            PatientIntakeSubmission.id.desc(),
+        )
+    )
+
+
 @app.post("/intake-links/status", response_model=IntakeStatusResponse)
 def read_intake_link_status(
     request: IntakeTokenRequest,
@@ -1134,18 +1149,13 @@ def read_intake_link_status(
     if state != InvitationState.AVAILABLE:
         return IntakeStatusResponse(state=state)
     patient = db.get(Patient, link.patient_id) if link.patient_id else None
-    latest = (
-        db.scalar(
-            select(PatientIntakeSubmission)
-            .where(PatientIntakeSubmission.intake_link_id == link.id)
-            .order_by(PatientIntakeSubmission.id.desc())
-        )
-        if patient
-        else None
-    )
+    latest = latest_patient_submission(db, link.id) if patient else None
     return IntakeStatusResponse(
         state=state,
         locked_name=patient.display_name if patient else None,
+        submission_status=latest.status if latest else None,
+        submitted_at=as_utc(latest.created_at) if latest else None,
+        review_note=latest.review_note if latest else None,
         profile=(
             {
                 "sex": latest.sex,
@@ -1181,7 +1191,17 @@ def submit_intake(
 ) -> IntakeSubmissionResponse:
     link = db.scalar(select(PatientIntakeLink).where(PatientIntakeLink.token_digest == digest_invitation_token(request.intake_token)))
     now = utc_for_sqlite(datetime.now(UTC))
-    if link is None or intake_link_state(link) != InvitationState.AVAILABLE:
+    if link is None:
+        raise unavailable_invitation()
+    # Serialize submissions on the link, including SQLite where FOR UPDATE is ignored.
+    # The value does not change; the write lock lasts until commit or rollback.
+    db.execute(
+        update(PatientIntakeLink)
+        .where(PatientIntakeLink.id == link.id)
+        .values(used_count=PatientIntakeLink.used_count)
+    )
+    db.refresh(link)
+    if intake_link_state(link) != InvitationState.AVAILABLE:
         raise unavailable_invitation()
     patient = db.get(Patient, link.patient_id) if link.patient_id else None
     if patient and request.display_name != patient.display_name:
@@ -1192,6 +1212,14 @@ def submit_intake(
     existing = db.scalar(select(PatientIntakeSubmission).where(PatientIntakeSubmission.submission_digest == submission_digest))
     if existing is not None:
         return intake_submission_response(existing, db)
+    if patient:
+        latest = latest_patient_submission(db, link.id)
+        if latest and latest.status == "pending":
+            raise HTTPException(409, "信息已提交，等待医生审核，请勿重复提交。")
+        if latest and latest.status == "approved" and not any(
+            (request.document_name, request.document_mime_type, request.document_base64)
+        ):
+            raise HTTPException(409, "建档已经通过，无需重复提交；补交病历请选择文件。")
     if not request.consent_given:
         raise HTTPException(status_code=422, detail="Demo notice consent is required.")
     notice = current_patient_notice(db, now)
@@ -1269,10 +1297,10 @@ def read_intake_document(
     if submission is None:
         raise HTTPException(status_code=404, detail="Intake document was not found in the allowed data scope.")
     if not submission.document_storage_name or not submission.document_mime_type or not submission.document_name:
-        raise HTTPException(status_code=404, detail="Intake document is unavailable.")
+        raise HTTPException(status_code=404, detail="此次申请仅提交了基本信息，未上传病历文件。")
     path = Path(os.getenv("INTAKE_UPLOAD_DIR", ".local/intake_uploads")) / submission.document_storage_name
     if not path.is_file():
-        raise HTTPException(status_code=404, detail="Intake document is unavailable.")
+        raise HTTPException(status_code=404, detail="原始文件当前不可用，请联系管理员检查文件存储。")
     return FileResponse(path, media_type=submission.document_mime_type, filename=submission.document_name)
 
 
