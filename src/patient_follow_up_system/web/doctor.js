@@ -327,7 +327,7 @@ async function reviewIntake(submission, action) {
       method: "POST",
       body: JSON.stringify({ action }),
     });
-    message(action === "approve" ? "申请已批准并进入患者库" : "申请已驳回");
+    message(action === "approve" ? "已批准，可在患者档案中查看" : "申请已驳回");
     await loadIntakes();
     await loadPatients();
   } catch (error) {
@@ -337,7 +337,11 @@ async function reviewIntake(submission, action) {
 
 async function openIntakeDocument(submissionId) {
   const response = await AppPaths.fetch(`/intake-submissions/${submissionId}/document`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!response.ok) { message("原始资料暂时无法打开", true); return; }
+  if (!response.ok) {
+    if (response.status === 401) { AppSession.logout("doctor", true); return; }
+    const error = await response.json().catch(() => ({}));
+    message(typeof error.detail === "string" ? error.detail : "原始资料暂时无法打开", true); return;
+  }
   const url = URL.createObjectURL(await response.blob());
   window.open(url, "_blank", "noopener");
   setTimeout(() => URL.revokeObjectURL(url), 60000);
@@ -352,21 +356,27 @@ async function loadIntakes() {
       item.append(
         detailLine("患者姓名", submission.display_name),
         detailLine("基本信息", `${submission.sex} · ${submission.date_of_birth} · ${submission.operator_relationship}`),
-        detailLine("状态", submission.status),
+        detailLine("状态", {pending:"等待医生审核",approved:"已批准",rejected:"已驳回"}[submission.status] || submission.status),
         detailLine("演示同意", submission.consented_at ? `${submission.notice_version} · ${new Date(submission.consented_at).toLocaleString()}${submission.consent_is_legacy_incomplete ? " · 历史内容快照不完整" : ""}` : "未记录"),
-        detailLine("资料处理", submission.extraction_status === "pending" ? "原件已保存，待提取/审核" : submission.extraction_status),
+        detailLine("资料处理", !submission.has_document ? "仅提交基本信息，未上传病历文件" : submission.extraction_status === "pending" ? "原件已保存，待提取/审核" : submission.extraction_status),
       );
-      item.append(actionButton("查看原始资料", () => openIntakeDocument(submission.id), true));
-      if (submission.has_document) item.append(actionButton("识别并逐字段审核", () => { location.href = AppPaths.url(`/clinical?source=intake&id=${submission.id}`); }, true));
+      const actionBar = document.createElement("div");actionBar.className="intake-action-bar";
+      if (submission.has_document) {
+        const documents = document.createElement("div");documents.className="intake-document-actions";
+        documents.append(actionButton("查看原始资料", () => openIntakeDocument(submission.id), true), actionButton("识别并逐字段审核", () => { location.href = AppPaths.url(`/clinical?source=intake&id=${submission.id}`); }, true));
+        actionBar.append(documents);
+      }
       if (submission.status === "pending") {
         const actions = document.createElement("div");
-        actions.className = "row";
+        actions.className = "intake-review-actions";
+        const reject = actionButton("驳回", () => reviewIntake(submission, "reject"));reject.className="danger";
         actions.append(
-          actionButton("批准并生成患者编号", () => reviewIntake(submission, "approve")),
-          actionButton("驳回", () => reviewIntake(submission, "reject"), true),
+          actionButton("批准", () => reviewIntake(submission, "approve")),
+          reject,
         );
-        item.append(actions);
+        actionBar.append(actions);
       }
+      if(actionBar.childElementCount)item.append(actionBar);
       return item;
     }));
     if (!items.length) $("intakes").textContent = "暂无建档申请。请在患者管理中先录入姓名，再生成患者专属建档码。";
