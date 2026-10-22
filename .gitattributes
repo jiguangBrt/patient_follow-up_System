@@ -1,0 +1,5 @@
+# Deployment scripts and systemd/Nginx files must survive Windows checkouts.
+deploy/linux/** text eol=lf
+
+# Keep Windows launchers native while storing normalized text in Git.
+*.bat text eol=crlf
