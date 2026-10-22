@@ -1,14 +1,14 @@
 const $ = id => document.getElementById(id);
-const intakeToken = new URLSearchParams(location.hash.slice(1)).get("token") || sessionStorage.getItem("intakeToken");
+const intakeToken = new URLSearchParams(location.hash.slice(1)).get("token") || AppPaths.storage.getItem("intakeToken");
 let currentNotice = null;
 let previewUrl = null;
 const keyName = `intakeSubmissionKey:${intakeToken}`;
-function newKey() { const bytes = new Uint8Array(24); crypto.getRandomValues(bytes); const key = Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join(""); sessionStorage.setItem(keyName,key); return key; }
-let submissionKey = sessionStorage.getItem(keyName) || newKey();
-if (intakeToken) { sessionStorage.setItem("intakeToken",intakeToken); history.replaceState(null,"",location.pathname); }
+function newKey() { const bytes = new Uint8Array(24); crypto.getRandomValues(bytes); const key = Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join(""); AppPaths.storage.setItem(keyName,key); return key; }
+let submissionKey = AppPaths.storage.getItem(keyName) || newKey();
+if (intakeToken) { AppPaths.storage.setItem("intakeToken",intakeToken); history.replaceState(null,"",location.pathname); }
 function status(text,error=false) { $("status").textContent=text; $("status").className=`status ${error?"error":"success"}`; }
 async function request(path,body) {
-  const response=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  const response=await AppPaths.fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
   const data=await response.json();
   if(!response.ok) { const error=new Error(typeof data.detail==="string"?data.detail:"请检查填写的信息和文件。"); error.status=response.status; throw error; }
   return data;
@@ -23,7 +23,7 @@ async function check() {
     if(data.locked_name) status(`${data.locked_name}的专属建档页，姓名由医生设定。`);
     else status("请先阅读当前患者须知。");
     if(data.profile) {$("sex").value=data.profile.sex;$("dateOfBirth").value=data.profile.date_of_birth;$("relationship").value=data.profile.operator_relationship;status("基本信息已保存，可核对后补交病历。");}
-    const response=await fetch("/patient-notices/current",{cache:"no-store"});currentNotice=await response.json();
+    const response=await AppPaths.fetch("/patient-notices/current",{cache:"no-store"});currentNotice=await response.json();
     if(!response.ok) throw new Error("患者须知暂不可用，请稍后再试。");
     $("noticeTitle").textContent=currentNotice.title;$("noticeVersion").textContent=`版本 ${currentNotice.version}`;
     $("noticeContent").replaceChildren(...currentNotice.content.split("\n").filter(Boolean).map(text=>{const p=document.createElement("p");p.textContent=text;return p;}));

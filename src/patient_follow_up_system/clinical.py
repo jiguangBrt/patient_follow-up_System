@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -19,6 +19,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from patient_follow_up_system import clinical_ocr
 from patient_follow_up_system.auth import require_roles
 from patient_follow_up_system.database import get_db
+from patient_follow_up_system.web_pages import page_response
 from patient_follow_up_system.models import (
     ClinicalDocument,
     ClinicalField,
@@ -38,11 +39,8 @@ Doctor = Annotated[User, Depends(require_roles(UserRole.DOCTOR))]
 
 
 @router.get("/clinical", include_in_schema=False)
-def workspace():
-    return FileResponse(
-        Path(__file__).parent / "web" / "clinical.html",
-        headers={"Cache-Control": "no-store"},
-    )
+def workspace(request: Request):
+    return page_response("clinical.html", request)
 
 
 class BufferUpload(BaseModel):

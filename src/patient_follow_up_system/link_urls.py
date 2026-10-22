@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import os
+import re
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
@@ -28,7 +29,7 @@ def public_base_url(request: Request) -> str:
         or parsed.password
         or parsed.query
         or parsed.fragment
-        or parsed.path not in ("", "/")
+        or not re.fullmatch(r"(?:/[A-Za-z0-9_-]+)*/?", parsed.path)
     ):
         raise HTTPException(503, "PUBLIC_BASE_URL 必须是可访问的 http(s) 站点地址。")
     return value

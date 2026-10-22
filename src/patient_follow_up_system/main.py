@@ -9,7 +9,7 @@ from typing import Annotated
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from openai import APIError, OpenAI
 from pydantic import BaseModel, Field, field_validator
@@ -28,6 +28,7 @@ from patient_follow_up_system.auth import (
     require_roles,
 )
 from patient_follow_up_system.link_urls import patient_link_token, public_base_url
+from patient_follow_up_system.web_pages import page_response
 from patient_follow_up_system.database import get_db
 from patient_follow_up_system.invitations import (
     MAX_FAILED_VERIFICATION_ATTEMPTS,
@@ -571,32 +572,34 @@ def read_doctor_current_patient_notice(
 
 @app.get("/", include_in_schema=False)
 @app.get("/login", include_in_schema=False)
-def login_page() -> FileResponse:
-    return FileResponse(web_root / "login.html", headers={"Cache-Control": "no-store"})
+def login_page(request: Request) -> HTMLResponse:
+    return page_response("login.html", request)
 
 
 @app.get("/doctor", include_in_schema=False)
-def doctor_page() -> FileResponse:
-    return FileResponse(web_root / "doctor.html", headers={"Cache-Control": "no-store"})
+def doctor_page(request: Request) -> HTMLResponse:
+    return page_response("doctor.html", request)
 
 
 @app.get("/invite", include_in_schema=False)
-def invitation_page() -> FileResponse:
-    return FileResponse(web_root / "invite.html", headers={"Cache-Control": "no-store"})
+def invitation_page(request: Request) -> HTMLResponse:
+    return page_response("invite.html", request)
 
 
 @app.get("/patient", include_in_schema=False)
-def patient_page() -> FileResponse:
-    return FileResponse(web_root / "patient.html", headers={"Cache-Control": "no-store"})
+def patient_page(request: Request) -> HTMLResponse:
+    return page_response("patient.html", request)
 
 
 @app.get("/intake", include_in_schema=False)
-def intake_page() -> FileResponse:
-    return FileResponse(web_root / "intake.html", headers={"Cache-Control": "no-store"})
+def intake_page(request: Request) -> HTMLResponse:
+    return page_response("intake.html", request)
 
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
+    if os.getenv("MODEL_ENABLED", "true").lower() != "true":
+        raise HTTPException(503, "当前试用部署未启用大模型服务。")
     model_name = app_env("MODEL_NAME")
 
     try:

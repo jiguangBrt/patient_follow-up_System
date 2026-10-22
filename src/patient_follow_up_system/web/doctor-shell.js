@@ -25,10 +25,11 @@
   ];
   const root = document.getElementById("doctorSidebar");
   root.innerHTML = '<div class="doctor-brand"><span class="brand-mark">随</span><div>随访工作台<small>临床资料管理</small></div></div><nav aria-label="医生工作区"></nav><div class="sidebar-footer"><a href="/patient" target="_blank" rel="noreferrer">患者端预览 ↗</a><div class="sidebar-profile"><span class="profile-avatar">医</span><div><strong id="sidebarUser">医生</strong><small>医生工作区</small></div><button id="logout" title="退出登录" aria-label="退出登录">退出</button></div></div>';
+  root.querySelector(".sidebar-footer > a").href = AppPaths.url("/patient");
   if (isAdmin) {
     root.querySelector("nav").setAttribute("aria-label", "管理员工作区");
     root.querySelector(".doctor-brand small").textContent = "平台管理";
-    const entry = root.querySelector(".sidebar-footer > a"); entry.href = "/"; entry.removeAttribute("target"); entry.textContent = "统一登录入口 ↗";
+    const entry = root.querySelector(".sidebar-footer > a"); entry.href = AppPaths.url("/"); entry.removeAttribute("target"); entry.textContent = "统一登录入口 ↗";
     root.querySelector(".profile-avatar").textContent = "管";
     root.querySelector(".sidebar-profile small").textContent = "管理员工作区";
     root.querySelector("#sidebarUser").textContent = "管理员";
@@ -39,7 +40,7 @@
     const title = document.createElement("p"); title.textContent = label; group.append(title);
     items.forEach(([key, text, planned]) => {
       const link = document.createElement("a"); link.dataset.view = key;
-      link.href = isAdmin ? `#${key}` : key === "clinical" ? "/clinical" : (location.pathname === "/doctor" ? "" : "/doctor") + "#" + key;
+      link.href = AppPaths.url(isAdmin ? `#${key}` : key === "clinical" ? "/clinical" : (AppPaths.pathname() === "/doctor" ? "" : "/doctor") + "#" + key);
       link.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${paths[key]}</svg>`;
       const name = document.createElement("span"); name.textContent = text; link.append(name);
       if (planned) { const badge = document.createElement("small"); badge.textContent = "待建设"; link.append(badge); }
@@ -51,5 +52,5 @@
     activate(view) { root.querySelectorAll("[data-view]").forEach(link => { link.classList.toggle("active", link.dataset.view === view); if(link.dataset.view === view) link.setAttribute("aria-current","page"); else link.removeAttribute("aria-current"); }); },
     setUser(name) { document.getElementById("sidebarUser").textContent = name; },
   };
-  DoctorShell.activate(location.pathname === "/clinical" ? "clinical" : location.hash.slice(1) || (isAdmin ? "accounts" : "patients"));
+  DoctorShell.activate(AppPaths.pathname() === "/clinical" ? "clinical" : location.hash.slice(1) || (isAdmin ? "accounts" : "patients"));
 })();

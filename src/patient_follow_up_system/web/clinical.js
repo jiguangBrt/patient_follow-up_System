@@ -9,7 +9,7 @@ const stateNames = {not_run:"尚未运行 OCR，可提取或手工录入",ready:
 const statusNames = {buffered:"缓冲区 · 未绑定患者",filed:"已入档",rejected:"已驳回"};
 function message(text, error=false) { $("message").textContent=text; $("message").className=`status ${error?"error":"success"}`; }
 async function api(path, options={}) {
-  const response=await fetch(path,{...options,headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
+  const response=await AppPaths.fetch(path,{...options,headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
   const data=await response.json();
   if(!response.ok) {if(response.status===401) AppSession.logout("doctor",true);throw new Error(typeof data.detail==="string"?data.detail:"请检查输入内容");}
   return data;
@@ -26,7 +26,7 @@ async function list() {
 }
 async function preview(page, evidence=null) {
   const sequence=++previewSequence;
-  const response=await fetch(`/clinical-documents/${current.id}/pages/${page}`,{headers:{Authorization:`Bearer ${token}`}});
+  const response=await AppPaths.fetch(`/clinical-documents/${current.id}/pages/${page}`,{headers:{Authorization:`Bearer ${token}`}});
   if(!response.ok) { if(sequence===previewSequence) {$("preview").removeAttribute("src");$("highlight").classList.add("hidden");message("预览不可用，请打开原件手工核对。",true);} return; }
   const blob=await response.blob(); if(sequence!==previewSequence) return;
   if(previewUrl) URL.revokeObjectURL(previewUrl);
@@ -96,7 +96,7 @@ function renderButtonState(){ $("extract").disabled=current.status!=="buffered"|
 bind("extract",async()=>{message("正在本机识别，请稍候…");current=await api(`/clinical-documents/${current.id}/extract`,{method:"POST",body:JSON.stringify({version:current.version})});render();await preview(1);await list();message(stateNames[current.extraction_status],current.extraction_status==="failed");});
 bind("save",()=>review("save"));bind("fileRecord",()=>review("file"));bind("reject",()=>review("reject"));
 bind("refresh",async()=>{await list();message("缓冲区已刷新；打开资料可加载最新审核版本。");});
-bind("openOriginal",async()=>{const response=await fetch(`/clinical-documents/${current.id}/file`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error("原件不可用或登录已失效");const url=URL.createObjectURL(await response.blob());window.open(url,"_blank","noopener");setTimeout(()=>URL.revokeObjectURL(url),60000);});
+bind("openOriginal",async()=>{const response=await AppPaths.fetch(`/clinical-documents/${current.id}/file`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error("原件不可用或登录已失效");const url=URL.createObjectURL(await response.blob());window.open(url,"_blank","noopener");setTimeout(()=>URL.revokeObjectURL(url),60000);});
 bind("history",async()=>{const events=await api(`/clinical-documents/${current.id}/history`);$("historyText").textContent=JSON.stringify(events,null,2);$("historyText").classList.remove("hidden");});
 $("previewPage").onchange=()=>preview(Number($("previewPage").value));
 $("logout").onclick=()=>AppSession.logout("doctor");

@@ -1,8 +1,6 @@
-from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -11,6 +9,7 @@ from sqlalchemy.orm import Session
 from patient_follow_up_system.auth import hash_password, require_roles
 from patient_follow_up_system.database import get_db
 from patient_follow_up_system.models import AccountEvent, User, UserRole
+from patient_follow_up_system.web_pages import page_response
 
 router = APIRouter()
 Admin = Annotated[User, Depends(require_roles(UserRole.ADMIN))]
@@ -47,11 +46,8 @@ def account_info(user: User) -> dict:
 
 
 @router.get("/admin", include_in_schema=False)
-def admin_page():
-    return FileResponse(
-        Path(__file__).parent / "web" / "admin.html",
-        headers={"Cache-Control": "no-store"},
-    )
+def admin_page(request: Request):
+    return page_response("admin.html", request)
 
 
 @router.get("/admin/accounts")

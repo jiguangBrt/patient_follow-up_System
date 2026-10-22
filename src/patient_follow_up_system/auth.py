@@ -20,7 +20,7 @@ load_dotenv()
 
 ALGORITHM = "HS256"
 password_hash = PasswordHash.recommended()
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
 def require_env(name: str) -> str:

@@ -43,7 +43,7 @@ async function api(path, options = {}) {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
-  const response = await fetch(path, options);
+  const response = await AppPaths.fetch(path, options);
   const contentType = response.headers.get("content-type") || "";
   const data = contentType.includes("application/json") ? await response.json() : null;
   if (!response.ok) {
@@ -102,7 +102,7 @@ async function showPatientDetails(patient, details) {
       intakeHistory.forEach(row => {
         if (!row.has_document) return;
         const upload = document.createElement("div"); upload.className="timeline-item";
-        upload.append(detailLine("扫码补交资料", new Date(row.created_at).toLocaleString()), actionButton("查看原件", () => openIntakeDocument(row.id), true), actionButton("识别并逐字段审核", () => {location.href=`/clinical?source=intake&id=${row.id}`;}, true));
+        upload.append(detailLine("扫码补交资料", new Date(row.created_at).toLocaleString()), actionButton("查看原件", () => openIntakeDocument(row.id), true), actionButton("识别并逐字段审核", () => {location.href = AppPaths.url(`/clinical?source=intake&id=${row.id}`);}, true));
         details.append(upload);
       });
     }
@@ -112,7 +112,7 @@ async function showPatientDetails(patient, details) {
       const item = document.createElement("article"); item.className = "timeline-item approved";
       item.append(detailLine("原件", record.original_name), detailLine("审核版本", `${record.version} · ${record.pending_fields} 项仍待确认`));
       record.fields.forEach(field => item.append(detailLine(field.label, field.confirmed_value)));
-      item.append(actionButton("查看原件、证据与审核记录", () => { location.href = `/clinical?id=${record.id}`; }, true));
+      item.append(actionButton("查看原件、证据与审核记录", () => { location.href = AppPaths.url(`/clinical?id=${record.id}`); }, true));
       details.append(item);
     });
     const timelineHeading = document.createElement("h4");
@@ -166,7 +166,7 @@ function doctorDocumentCard(record, patient, details) {
     detailLine("须知记录", `${record.notice_version} · ${new Date(record.consented_at).toLocaleString()}`),
   );
   item.append(actionButton("查看原始资料", () => openPatientDocument(record.id), true));
-  item.append(actionButton("提取候选与逐字段审核", () => { location.href = `/clinical?source=patient&id=${record.id}`; }, true));
+  item.append(actionButton("提取候选与逐字段审核", () => { location.href = AppPaths.url(`/clinical?source=patient&id=${record.id}`); }, true));
   if (record.review_status === "approved") {
     item.append(
       detailLine("确认事件", `${record.confirmed_event_date} · ${record.confirmed_label}`),
@@ -212,7 +212,7 @@ function doctorDocumentCard(record, patient, details) {
 }
 
 async function openPatientDocument(documentId) {
-  const response = await fetch(`/patient-documents/${documentId}/file`, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await AppPaths.fetch(`/patient-documents/${documentId}/file`, { headers: { Authorization: `Bearer ${token}` } });
   if (!response.ok) { message("原始资料暂时无法打开", true); return; }
   const url = URL.createObjectURL(await response.blob());
   window.open(url, "_blank", "noopener");
@@ -336,7 +336,7 @@ async function reviewIntake(submission, action) {
 }
 
 async function openIntakeDocument(submissionId) {
-  const response = await fetch(`/intake-submissions/${submissionId}/document`, { headers: { Authorization: `Bearer ${token}` } });
+  const response = await AppPaths.fetch(`/intake-submissions/${submissionId}/document`, { headers: { Authorization: `Bearer ${token}` } });
   if (!response.ok) { message("原始资料暂时无法打开", true); return; }
   const url = URL.createObjectURL(await response.blob());
   window.open(url, "_blank", "noopener");
@@ -357,7 +357,7 @@ async function loadIntakes() {
         detailLine("资料处理", submission.extraction_status === "pending" ? "原件已保存，待提取/审核" : submission.extraction_status),
       );
       item.append(actionButton("查看原始资料", () => openIntakeDocument(submission.id), true));
-      if (submission.has_document) item.append(actionButton("识别并逐字段审核", () => { location.href = `/clinical?source=intake&id=${submission.id}`; }, true));
+      if (submission.has_document) item.append(actionButton("识别并逐字段审核", () => { location.href = AppPaths.url(`/clinical?source=intake&id=${submission.id}`); }, true));
       if (submission.status === "pending") {
         const actions = document.createElement("div");
         actions.className = "row";

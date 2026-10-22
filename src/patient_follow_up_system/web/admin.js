@@ -4,7 +4,7 @@
   let accounts = [];
   function message(text, error=false) { $("message").textContent=text; $("message").className=`status ${error?"error":"success"}`; }
   async function api(path, options={}) {
-    const response=await fetch(path,{...options,headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
+    const response=await AppPaths.fetch(path,{...options,headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
     const data=await response.json();
     if(!response.ok) { if(response.status===401||response.status===403) AppSession.logout("admin",true); throw new Error(typeof data.detail==="string"?data.detail:"请检查输入内容。"); }
     return data;

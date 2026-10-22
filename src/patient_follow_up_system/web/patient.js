@@ -13,7 +13,7 @@ async function patientApi(path, options = {}) {
     "Content-Type": "application/json",
     ...(patientToken ? { Authorization: `Bearer ${patientToken}` } : {}),
   };
-  const response = await fetch(path, options);
+  const response = await AppPaths.fetch(path, options);
   const data = await response.json();
   if (!response.ok) {
     if (response.status === 401) AppSession.logout("patient", true);
@@ -41,7 +41,7 @@ async function loadPatientHome() {
     const patient = patients[0];
     const [encounters, notice, documents] = await Promise.all([
       patientApi(`/patients/${patient.id}/encounters`),
-      fetch("/patient-notices/current").then(async response => {
+      AppPaths.fetch("/patient-notices/current").then(async response => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || "患者须知暂不可用");
         return data;
@@ -117,7 +117,7 @@ function renderPatientDocuments(documents) {
 }
 
 async function openOwnPatientDocument(documentId) {
-  const response = await fetch(`/patient-documents/${documentId}/file`, {
+  const response = await AppPaths.fetch(`/patient-documents/${documentId}/file`, {
     headers: { Authorization: `Bearer ${patientToken}` },
   });
   if (!response.ok) {
