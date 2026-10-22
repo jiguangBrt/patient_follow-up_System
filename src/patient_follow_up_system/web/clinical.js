@@ -40,11 +40,20 @@ async function preview(page, evidence=null) {
 }
 async function open(id) {
   current=await api(`/clinical-documents/${id}`);
-  history.replaceState(null,"",`/clinical?id=${id}`);
-  render(); await preview(1); $("reviewCard").scrollIntoView({behavior:"smooth",block:"start"});
+  history.replaceState(null,"",AppPaths.url(`/clinical?id=${id}`));
+  render(); await preview(1); $("fields").scrollTop=0;
 }
+function resizePreview() {
+  const image=$("preview"), stage=$("previewStage");
+  if(!image.naturalWidth||!stage.clientHeight)return;
+  const scale=Math.min(stage.clientWidth/image.naturalWidth,stage.clientHeight/image.naturalHeight);
+  Object.assign($("previewWrap").style,{width:`${image.naturalWidth*scale}px`,height:`${image.naturalHeight*scale}px`});
+}
+$("preview").onload=resizePreview;
+new ResizeObserver(resizePreview).observe($("previewStage"));
 function render() {
   const doc=current; editors.clear();
+  document.body.classList.add("clinical-review-open");
   $("reviewCard").classList.remove("hidden"); $("reviewTitle").textContent=`${doc.original_name} · ${statusNames[doc.status]}`;
   $("documentMeta").textContent=`资料 #${doc.id} · 版本 ${doc.version} · ${doc.document_type} · ${doc.extraction_version||"人工录入"} · 原件 SHA-256：${doc.sha256}`;
   $("extractionState").textContent=doc.extraction_error||stateNames[doc.extraction_status];
@@ -52,36 +61,39 @@ function render() {
   $("fields").replaceChildren(...doc.fields.map(field=>{
     const row=document.createElement("article"); row.className="field-review";
     const heading=document.createElement("h3"); heading.textContent=field.label;
-    const candidate=document.createElement("p"); candidate.className="candidate";
-    const quality={missing:"未识别/未提供",conflict:"存在冲突，请人工核对",low_confidence:"低可信，请人工核对",recognized:"识别候选"}[field.candidate_status];
-    candidate.textContent=`${quality}${field.confidence==null?"":` · OCR 置信度 ${Math.round(field.confidence*100)}%`}\n${field.candidate_value||"未知"}`;
     const value=document.createElement("textarea"); value.setAttribute("aria-label",`${field.label}确认值`); value.maxLength=10000; value.value=field.confirmed_value??field.candidate_value??"";
-    const select=document.createElement("select"); select.setAttribute("aria-label",`${field.label}审核状态`);
-    [ ["pending","待确认（暂不入档）"],["confirmed","原值确认"],["corrected","修改后确认/手工录入"] ].forEach(([v,t])=>select.add(new Option(t,v)));
-    select.value=field.review_status;
-    const locked=doc.status==="rejected"||(doc.status==="filed"&&field.review_status!=="pending"); select.disabled=locked; value.disabled=locked;
-    value.oninput=()=>{ if(select.value==="confirmed"&&value.value!==field.candidate_value) select.value="corrected"; };
-    row.append(heading,candidate,value,select);
+    value.placeholder="未知或未提供时留空";
+    const locked=doc.status==="rejected"||(doc.status==="filed"&&field.review_status!=="pending"); value.disabled=locked;
+    row.append(heading,value);
     const evidence=document.createElement("div"); evidence.className="row";
-    field.evidence.forEach((item,index)=>evidence.append(button(`定位原文 ${index+1}（第${item.page}页）`,async()=>{await preview(item.page,item);$("previewWrap").scrollIntoView({behavior:"smooth",block:"center"});})));
-    row.append(evidence); editors.set(field.key,{value,select,locked}); return row;
+    field.evidence.forEach((item,index)=>evidence.append(button(`定位原文 ${index+1}（第${item.page}页）`,()=>preview(item.page,item))));
+    row.append(evidence); editors.set(field.key,{value,field,locked}); return row;
   }));
   const target=$("targetPatient"); target.replaceChildren(new Option("请人工选择，不按识别姓名自动匹配",""),new Option("按已确认姓名新建患者档案","new"));
   patients.forEach(p=>target.add(new Option(`${p.display_name} · ${p.patient_code}`,String(p.id))));
   if(doc.patient_id) target.value=String(doc.patient_id);
   target.disabled=doc.status!=="buffered";
-  $("fileRecord").disabled=doc.status!=="buffered"; $("reject").disabled=doc.status!=="buffered"; $("save").disabled=doc.status==="rejected";
-  $("extract").disabled=doc.status!=="buffered"||doc.fields.some(f=>f.review_status!=="pending");
+  renderButtonState();
   $("historyText").classList.add("hidden");
 }
+function reviewedFields(action) {
+  return action==="reject"?[]:[...editors].filter(([,e])=>!e.locked).map(([key,e])=>{
+    const value=e.value.value.trim();
+    const confirm=action==="file"||e.field.review_status!=="pending";
+    const status=!value||!confirm?"pending":value===e.field.candidate_value&&!["missing","conflict"].includes(e.field.candidate_status)?"confirmed":"corrected";
+    return {key,review_status:status,confirmed_value:value};
+  });
+}
 async function review(action) {
-  const fields=[...editors].filter(([,e])=>!e.locked).map(([key,e])=>({key,review_status:e.select.value,confirmed_value:e.select.value==="pending"?null:e.value.value.trim()}));
+  const fields=reviewedFields(action);
   const target=$("targetPatient").value;
-  const payload={version:current.version,action,fields,create_patient:action==="file"&&target==="new",patient_id:action==="file"&&target&&target!=="new"?Number(target):null};
+  const alreadyFiled=current.status==="filed";
+  const payload={version:current.version,action:alreadyFiled&&action==="file"?"save":action,fields,create_patient:action==="file"&&!alreadyFiled&&target==="new",patient_id:action==="file"&&!alreadyFiled&&target&&target!=="new"?Number(target):null};
   if(action==="file"&&!target) throw new Error("请先选择确认入档患者或明确新建档案。");
   current=await api(`/clinical-documents/${current.id}/review`,{method:"POST",body:JSON.stringify(payload)});
   patients=await api("/patients"); render(); await list();
-  message(action==="file"?"已按确认姓名归入患者档案。待确认字段仍留在审核区。":action==="reject"?"整份资料已驳回，原件和审核记录已保留。":"逐字段审核已保存，尚未确认的值不会进入正式档案。");
+  if(action==="save"&&current.status==="buffered")$("targetPatient").value=target;
+  message(action==="file"?"已确认并归入患者档案，空白项未入档。":action==="reject"?"整份资料已驳回，原件和审核记录已保留。":"草稿已暂存，尚未确认的内容不会进入正式档案。");
 }
 $("uploadForm").onsubmit=async event=>{
   event.preventDefault(); const btn=$("uploadButton");btn.disabled=true;
@@ -92,12 +104,13 @@ $("uploadForm").onsubmit=async event=>{
   }catch(e){message(e.message,true);}finally{btn.disabled=false;}
 };
 function bind(id,action){$(id).onclick=async()=>{const btn=$(id);btn.disabled=true;try{await action();}catch(e){message(e.message,true);}finally{if(current) renderButtonState();else btn.disabled=false;}};}
-function renderButtonState(){ $("extract").disabled=current.status!=="buffered"||current.fields.some(f=>f.review_status!=="pending");$("save").disabled=current.status==="rejected";$("fileRecord").disabled=current.status!=="buffered";$("reject").disabled=current.status!=="buffered";$("refresh").disabled=false;$("openOriginal").disabled=false;$("history").disabled=false; }
+function renderButtonState(){ $("extract").disabled=current.status!=="buffered"||current.fields.some(f=>f.review_status!=="pending"||f.confirmed_value!=null);$("save").disabled=current.status==="rejected";$("fileRecord").disabled=current.status==="rejected"||(current.status==="filed"&&!current.fields.some(f=>f.review_status==="pending"));$("reject").disabled=current.status!=="buffered";$("refresh").disabled=false;$("openOriginal").disabled=false;$("history").disabled=false; }
 bind("extract",async()=>{message("正在本机识别，请稍候…");current=await api(`/clinical-documents/${current.id}/extract`,{method:"POST",body:JSON.stringify({version:current.version})});render();await preview(1);await list();message(stateNames[current.extraction_status],current.extraction_status==="failed");});
 bind("save",()=>review("save"));bind("fileRecord",()=>review("file"));bind("reject",()=>review("reject"));
 bind("refresh",async()=>{await list();message("缓冲区已刷新；打开资料可加载最新审核版本。");});
 bind("openOriginal",async()=>{const response=await AppPaths.fetch(`/clinical-documents/${current.id}/file`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error("原件不可用或登录已失效");const url=URL.createObjectURL(await response.blob());window.open(url,"_blank","noopener");setTimeout(()=>URL.revokeObjectURL(url),60000);});
-bind("history",async()=>{const events=await api(`/clinical-documents/${current.id}/history`);$("historyText").textContent=JSON.stringify(events,null,2);$("historyText").classList.remove("hidden");});
+bind("history",async()=>{if(!$("historyText").classList.contains("hidden")){$("historyText").classList.add("hidden");return;}const events=await api(`/clinical-documents/${current.id}/history`);$("historyText").textContent=JSON.stringify(events,null,2);$("historyText").classList.remove("hidden");});
+$("backToBuffer").onclick=()=>{if(!window.confirm("返回缓冲区？未暂存的修改不会保存。"))return;document.body.classList.remove("clinical-review-open");$("reviewCard").classList.add("hidden");history.replaceState(null,"",AppPaths.url("/clinical"));};
 $("previewPage").onchange=()=>preview(Number($("previewPage").value));
 $("logout").onclick=()=>AppSession.logout("doctor");
 async function init(){try{if(!token)return;const me=await api("/auth/me");if(me.role!=="doctor"){AppSession.logout("doctor");return;}DoctorShell.setUser(me.display_name);patients=await api("/patients");await list();const params=new URLSearchParams(location.search);
