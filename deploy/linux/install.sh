@@ -64,6 +64,9 @@ install -m 0644 deploy/linux/patientfollowup.service /etc/systemd/system/
 install -m 0644 deploy/linux/patientfollowup-backup.service /etc/systemd/system/
 install -m 0644 deploy/linux/patientfollowup-backup.timer /etc/systemd/system/
 install -d -m 0755 /etc/nginx/project-locations
+# Ubuntu nginx workers run as www-data. Large JSON uploads spill to this directory.
+# A directory owned by a previous worker identity makes uploads fail with HTTP 500.
+install -d -o www-data -g www-data -m 0700 /var/lib/nginx/body
 install -m 0644 deploy/linux/patientfollowup.nginx.conf /etc/nginx/project-locations/patientfollowup.conf
 
 # One shared HTTP listener; add future projects as separate location snippets.

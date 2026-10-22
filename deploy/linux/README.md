@@ -60,6 +60,7 @@ Nginx 的访问日志在共享服务器上；Uvicorn 不记录含患者 ID 的�
 - Python 代码可切回旧 release，但数据库迁移不会随软链接自动回滚；恢复数据库须按迁移兼容性单独处理。
 - 其他项目使用独立用户、数据目录和本机端口（例如 8102），再在 `/etc/nginx/project-locations/` 新建互不重叠的 location 文件。不要重复创建监听同一默认端口的站点，也不要抢占本项目端口或路径。
 - 修改 Nginx 后先运行 `nginx -t`，通过后执行 `systemctl reload nginx`。
+- 上传大文件还需要 Nginx 请求临时目录可写。Ubuntu 的 worker 用户为 `www-data`，`install.sh` 会将 `/var/lib/nginx/body` 设为该用户所有、权限 `0700`。若小请求正常而上传返回 HTML 500，检查 `/var/log/nginx/error.log` 是否出现该目录的 `Permission denied`；测试须包含接近 8 MB 的真实图片，以覆盖请求写入临时文件的路径。修改 worker 用户或临时目录时须同步权限，不要放宽为全员可写。
 - 当前使用可信的公网 IP HTTPS，未配置域名，也不代表已经完成备案。仅用于受控试用；正式患者资料上线前需完成相应访问和数据保护安排。
 
 ## 公网 IP HTTPS 与自动续期

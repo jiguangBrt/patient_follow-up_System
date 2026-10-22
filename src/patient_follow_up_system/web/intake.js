@@ -10,9 +10,16 @@ if (intakeToken) { AppPaths.storage.setItem("intakeToken",intakeToken); history.
 function status(text,error=false) { $("status").textContent=text; $("status").className=`status ${error?"error":"success"}`; }
 async function request(path,body) {
   const response=await AppPaths.fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
-  const data=await response.json();
+  const data=await readResponse(response);
   if(!response.ok) { const error=new Error(typeof data.detail==="string"?data.detail:"请检查填写的信息和文件。"); error.status=response.status; throw error; }
   return data;
+}
+async function readResponse(response) {
+  try { return JSON.parse(await response.text()); }
+  catch {
+    const error=new Error(response.status===413?"上传请求过大，请选择不超过 8 MB 的 JPG、PNG 或 PDF 文件。":response.status>=500?"服务器暂时无法接收请求，请稍后重试；若持续失败，请联系管理员。":"服务器返回了异常内容，请刷新页面后重试。");
+    error.status=response.status;throw error;
+  }
 }
 function showReviewStatus(reviewStatus, submittedAt, hasDocument, noticeVersion = null) {
   const approved = reviewStatus === "approved";
@@ -45,7 +52,7 @@ async function check(allowSupplement = false) {
     $("submitButton").textContent=data.submission_status==="approved"?"提交补交病历":"提交给医生审核";
     $("stepLabel").textContent="第 1 步，共 2 步";$("pageTitle").textContent="阅读患者须知";
     if(data.submission_status==="rejected") {submissionKey=newKey();status(`上次申请已驳回，请核对后重新提交。${data.review_note||""}`,true);}
-    const response=await AppPaths.fetch("/patient-notices/current",{cache:"no-store"});currentNotice=await response.json();
+    const response=await AppPaths.fetch("/patient-notices/current",{cache:"no-store"});currentNotice=await readResponse(response);
     if(!response.ok) throw new Error("患者须知暂不可用，请稍后再试。");
     $("noticeTitle").textContent=currentNotice.title;$("noticeVersion").textContent=`版本 ${currentNotice.version}`;
     $("noticeContent").replaceChildren(...currentNotice.content.split("\n").filter(Boolean).map(text=>{const p=document.createElement("p");p.textContent=text;return p;}));
