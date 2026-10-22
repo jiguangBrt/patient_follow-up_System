@@ -281,6 +281,36 @@ def test_account_permissions_duplicates_validation_and_no_admin_escalation(env):
     )
 
 
+def test_pending_drafts_persist_without_filing_and_cannot_be_overwritten(env):
+    client, _, ids = env
+    headers = auth(client)
+    doc = upload(client, headers)
+    response = review(client, headers, doc, [
+        field("patient_name", "虚构甲", "pending"),
+        field("chief_complaint", "核对中的主诉草稿", "pending"),
+        field("past_history", "", "pending"),
+    ])
+    assert response.status_code == 200, response.text
+    saved = client.get(f"/clinical-documents/{doc['id']}", headers=headers).json()
+    fields = {item["key"]: item for item in saved["fields"]}
+    assert fields["chief_complaint"]["confirmed_value"] == "核对中的主诉草稿"
+    assert fields["chief_complaint"]["review_status"] == "pending"
+    assert fields["past_history"]["confirmed_value"] == ""
+    assert saved["status"] == "buffered" and saved["patient_id"] is None
+    assert client.get(f"/patients/{ids['patient_record']}/clinical-records", headers=headers).json() == []
+    assert client.post(f"/clinical-documents/{doc['id']}/extract", headers=headers, json={"version":saved["version"]}).status_code == 409
+    filed = review(client, headers, saved, [
+        field("patient_name", "虚构甲"),
+        field("chief_complaint", "核对完成的主诉"),
+    ], "file", patient_id=ids["patient_record"])
+    assert filed.status_code == 200, filed.text
+    # Further drafts on an already filed document are still excluded from its record.
+    later = review(client, headers, filed.json(), [field("past_history", "后续草稿", "pending")])
+    assert later.status_code == 200, later.text
+    record = client.get(f"/patients/{ids['patient_record']}/clinical-records", headers=headers).json()[0]
+    assert {item["key"] for item in record["fields"]} == {"patient_name", "chief_complaint"}
+
+
 def test_unbound_buffer_original_hash_extract_review_partial_file_and_later_pending(
     env, monkeypatch
 ):

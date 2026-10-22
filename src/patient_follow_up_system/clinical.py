@@ -344,7 +344,7 @@ def extract(document_id: int, request: ExtractionRequest, db: DB, doctor: Doctor
     doc = own_document(db, document_id, doctor)
     if doc.status != "buffered" or doc.version != request.version:
         raise HTTPException(409, "只能提取当前版本的缓冲区资料，请刷新。")
-    if any(f.review_status != "pending" for f in fields_for(db, doc.id)):
+    if any(f.review_status != "pending" or f.confirmed_value is not None for f in fields_for(db, doc.id)):
         raise HTTPException(409, "已有人工审核结果，不能重新提取覆盖。")
     path, mime_type, version, actor_id = (
         original_path(doc),
@@ -427,10 +427,9 @@ def review(document_id: int, request: Review, db: DB, doctor: Doctor):
     now = datetime.now(UTC).replace(tzinfo=None)
     for change in request.fields:
         field = fields[change.key]
-        value = change.confirmed_value.strip() if change.confirmed_value else None
-        if change.review_status == "pending":
-            value = None
-        elif not value:
+        value = change.confirmed_value.strip() if change.confirmed_value is not None else None
+        # A pending value is a saved draft, excluded from the filed record below.
+        if change.review_status != "pending" and not value:
             raise HTTPException(422, "确认字段需要填写值；未知请保留待确认。")
         elif change.review_status == "confirmed" and (
             value != field.candidate_value
