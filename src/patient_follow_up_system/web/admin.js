@@ -2,6 +2,7 @@
   const $ = id => document.getElementById(id);
   const token = AppSession.require("admin");
   let accounts = [];
+  const loginTimeFormat = new Intl.DateTimeFormat("zh-CN", {timeZone:"Asia/Shanghai", year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false});
   function message(text, error=false) { $("message").textContent=text; $("message").className=`status ${error?"error":"success"}`; }
   async function api(path, options={}) {
     const response=await AppPaths.fetch(path,{...options,headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
@@ -17,11 +18,12 @@
       const row=document.createElement("tr");
       [account.display_name,account.username,account.role==="doctor"?"医生":"患者"].forEach(value=>{const cell=document.createElement("td");cell.textContent=value;row.append(cell);});
       const stateCell=document.createElement("td"), state=document.createElement("span");state.className=`account-state ${account.is_active?"":"inactive"}`;state.textContent=account.is_active?"启用":"停用";stateCell.append(state);row.append(stateCell);
+      const loginCell=document.createElement("td");loginCell.className="account-login-time";loginCell.textContent=account.last_login_at?loginTimeFormat.format(new Date(account.last_login_at)):"暂无记录";row.append(loginCell);
       const actionCell=document.createElement("td"), button=document.createElement("button");button.type="button";button.className="secondary";button.textContent=account.is_active?"停用":"启用";
       button.onclick=async()=>{button.disabled=true;try{await api(`/admin/accounts/${account.id}`,{method:"PATCH",body:JSON.stringify({is_active:!account.is_active})});await load();message("账号状态已更新");}catch(error){message(error.message,true);button.disabled=false;}};
       actionCell.append(button);row.append(actionCell);return row;
     }));
-    if(!filtered.length){const row=document.createElement("tr"),cell=document.createElement("td");cell.colSpan=5;cell.textContent="没有匹配的账号。";row.append(cell);$("accounts").append(row);}
+    if(!filtered.length){const row=document.createElement("tr"),cell=document.createElement("td");cell.colSpan=6;cell.textContent="没有匹配的账号。";row.append(cell);$("accounts").append(row);}
   }
   async function load(){accounts=await api("/admin/accounts");renderAccounts();}
   function activateView(){

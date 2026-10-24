@@ -1,3 +1,4 @@
+from datetime import UTC
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -42,6 +43,9 @@ def account_info(user: User) -> dict:
         "role": user.role,
         "is_active": user.is_active,
         "created_at": user.created_at,
+        "last_login_at": user.last_login_at.replace(tzinfo=UTC)
+        if user.last_login_at
+        else None,
     }
 
 

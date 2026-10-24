@@ -652,8 +652,11 @@ def login(
         )
 
     expire_minutes = int(require_env("ACCESS_TOKEN_EXPIRE_MINUTES"))
+    access_token = create_access_token(user.id, user.role)
+    user.last_login_at = utc_for_sqlite(datetime.now(UTC))
+    db.commit()
     return TokenResponse(
-        access_token=create_access_token(user.id, user.role),
+        access_token=access_token,
         token_type="bearer",
         expires_in=expire_minutes * 60,
     )

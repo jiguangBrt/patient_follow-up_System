@@ -117,6 +117,55 @@ def test_unified_login_checks_selected_role_before_issuing_a_token(env, role):
     assert bad_password.status_code == 401
 
 
+@pytest.mark.parametrize("role", ["doctor", "patient", "admin"])
+def test_only_successful_login_updates_last_login_and_api_keeps_utc(env, role):
+    client, factory, ids = env
+    admin_headers = auth(client, "admin")
+    baseline = datetime(2020, 1, 2, 3, 4, 5)
+    with factory() as db:
+        user = db.get(User, ids[role])
+        user.last_login_at = baseline
+        db.commit()
+    payload = {"username": role, "password": PASSWORD, "role": role}
+    assert (
+        client.post("/auth/login", json=payload | {"password": "wrong"}).status_code
+        == 401
+    )
+    wrong_role = "doctor" if role != "doctor" else "patient"
+    assert (
+        client.post("/auth/login", json=payload | {"role": wrong_role}).status_code
+        == 403
+    )
+    with factory() as db:
+        user = db.get(User, ids[role])
+        assert user.last_login_at == baseline
+        user.is_active = False
+        db.commit()
+    assert client.post("/auth/login", json=payload).status_code == 401
+    with factory() as db:
+        user = db.get(User, ids[role])
+        assert user.last_login_at == baseline
+        user.is_active = True
+        db.commit()
+    before = datetime.now(UTC).replace(tzinfo=None)
+    result = client.post("/auth/login", json=payload)
+    assert result.status_code == 200
+    with factory() as db:
+        recorded = db.get(User, ids[role]).last_login_at
+        assert before <= recorded <= datetime.now(UTC).replace(tzinfo=None)
+    # Reading a page or using an existing token must not count as another login.
+    headers = {"Authorization": "Bearer " + result.json()["access_token"]}
+    assert client.get("/auth/me", headers=headers).status_code == 200
+    with factory() as db:
+        assert db.get(User, ids[role]).last_login_at == recorded
+    if role != "admin":
+        rows = client.get("/admin/accounts", headers=admin_headers).json()
+        account = next(row for row in rows if row["id"] == ids[role])
+        returned = datetime.fromisoformat(account["last_login_at"])
+        assert returned.utcoffset().total_seconds() == 0
+        assert returned.replace(tzinfo=None) == recorded
+
+
 def png_bytes():
     output = io.BytesIO()
     Image.new("RGB", (300, 200), "white").save(output, format="PNG")
@@ -188,6 +237,7 @@ def test_admin_create_disable_blocks_new_login_and_existing_token(env):
         )
         assert response.status_code == 201, response.text
         account = response.json()
+        assert account["last_login_at"] is None
         assert (
             account["is_active"]
             and "password_hash" not in account
