@@ -40,6 +40,7 @@ def invitation_qr_svg(invitation_url: str) -> str:
     segno.make(invitation_url, error="m").save(
         output,
         kind="svg",
+        omitsize=True,
         scale=5,
         border=2,
         dark="#123c69",

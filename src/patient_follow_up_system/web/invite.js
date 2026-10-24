@@ -1,11 +1,11 @@
 const $ = (id) => document.getElementById(id);
-let auth = sessionStorage.getItem("patientToken");
+let auth = AppPaths.storage.getItem("patientToken");
 let accountMode = auth ? "login" : "register";
 let invitationToken = new URLSearchParams(location.hash.slice(1)).get("token")
-  || sessionStorage.getItem("invitationToken");
+  || AppPaths.storage.getItem("invitationToken");
 
 if (invitationToken) {
-  sessionStorage.setItem("invitationToken", invitationToken);
+  AppPaths.storage.setItem("invitationToken", invitationToken);
   history.replaceState(null, "", location.pathname);
 }
 
@@ -24,7 +24,7 @@ function show(text, error = false) {
 }
 
 async function request(path, body, withAuth = false) {
-  const response = await fetch(path, {
+  const response = await AppPaths.fetch(path, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -100,8 +100,9 @@ $("bindForm").onsubmit = async (event) => {
         password: $("newPassword").value,
       });
       $("createdUsername").textContent = registered.username;
+      $("newAccountSummary").classList.remove("hidden");
       auth = registered.access_token;
-      sessionStorage.setItem("patientToken", auth);
+      AppPaths.storage.setItem("patientToken", auth);
       $("newPassword").value = "";
       $("confirmPassword").value = "";
     } else if (!auth) {
@@ -110,7 +111,7 @@ $("bindForm").onsubmit = async (event) => {
         password: $("password").value,
       });
       auth = login.access_token;
-      sessionStorage.setItem("patientToken", auth);
+      AppPaths.storage.setItem("patientToken", auth);
       $("password").value = "";
     }
     const result = accountMode === "register" && auth
@@ -122,12 +123,14 @@ $("bindForm").onsubmit = async (event) => {
     $("bindForm").classList.add("hidden");
     $("done").classList.remove("hidden");
     show(result.already_bound ? "该账号已经绑定本人档案" : "核验成功");
-    sessionStorage.removeItem("invitationToken");
+    AppPaths.storage.removeItem("invitationToken");
   } catch (error) {
     if (error.status === 401 || error.status === 403) {
       auth = null;
-      sessionStorage.removeItem("patientToken");
-      $("accountFields").classList.remove("hidden");
+      AppPaths.storage.removeItem("patientToken");
+      $("registerMode").classList.remove("hidden");
+      $("loginMode").classList.remove("hidden");
+      setAccountMode("login");
     }
     const safeMessages = new Set([
       "两次输入的密码不一致",

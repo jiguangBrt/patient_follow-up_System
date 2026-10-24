@@ -1,91 +1,31 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>医生工作台</title>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>医生工作台</title>
   <link rel="stylesheet" href="/static/app.css?v=20260911-5">
+  <link rel="stylesheet" href="/static/doctor-shell.css?v=20261022-intake-2">
+  <link rel="stylesheet" href="/static/patient-workspace.css?v=20261024-workspace-1">
 </head>
-<body>
-  <header><h1>患者随访 · 医生工作台</h1><p>医生客户试用版 · 当前仅使用虚构或去标识化数据</p></header>
-  <main>
-    <section class="card" id="loginCard">
-      <h2>医生登录</h2>
-      <form id="loginForm" class="row">
-        <input id="username" value="demo_doctor" autocomplete="username" aria-label="用户名">
-        <input id="password" type="password" autocomplete="current-password" placeholder="演示密码" aria-label="密码">
-        <button>登录</button>
-      </form>
-      <p class="muted">密码仅提交给本地后端，不会显示在页面。</p>
+<body class="doctor-app signed-in">
+  <aside id="doctorSidebar" class="doctor-sidebar"></aside>
+  <main class="doctor-main">
+    <div class="workspace-topbar"><div><p id="breadcrumb" class="breadcrumb">诊疗管理 / 患者管理</p><h1 id="pageTitle">患者管理</h1></div><span class="trial-tag">试用环境 · 仅虚构或去标识化资料</span></div>
+    <section id="patientsCard" class="hidden" aria-label="患者管理工作区">
+      <aside class="patient-directory" aria-label="患者名单">
+        <div class="directory-header"><h2>患者管理</h2><p id="patientCounts" class="muted"></p><button id="showNewPatient">＋ 新增患者</button><input id="patientSearch" type="search" placeholder="搜索姓名或编号" aria-label="搜索患者姓名或编号"></div>
+        <div id="patients" class="patient-name-list" role="group" aria-label="选择患者"></div>
+      </aside>
+      <section class="patient-detail-pane" aria-label="患者档案">
+        <header class="patient-detail-header"><div><p class="workspace-eyebrow">患者档案</p><h1 id="patientHeading">请选择患者</h1><p id="patientMeta" class="muted"></p></div><div class="row"><button id="showPatientQr" class="secondary" disabled>建档二维码 / 重印</button><button id="refreshPatient" class="secondary" disabled>刷新档案</button></div></header>
+        <div id="patientDetailScroll" tabindex="0" aria-label="就诊档案列表"><div class="patient-empty"><h2>从左侧选择患者</h2><p>每次就诊的病历与报告将在这里按日期展示。</p></div></div>
+      </section>
     </section>
-
-    <section class="card hidden" id="patientsCard">
-      <div class="toolbar">
-        <h2>我负责的患者</h2>
-        <div class="row">
-          <a class="buttonLink secondary" href="/patient" target="_blank" rel="noreferrer">打开患者端</a>
-          <button id="showNewPatient">新增患者</button>
-          <button id="createIntakeLink">生成通用建档二维码</button>
-          <button id="loadIntakes" class="secondary">待审核申请</button>
-          <button class="secondary" id="logout">退出</button>
-        </div>
-      </div>
-      <p class="muted">系统自动生成患者编号和就诊编号。尚未关联账号表示患者档案已经建立，但患者还没有通过专属邀请认领该档案。</p>
-      <div id="patients"></div>
-    </section>
-
-    <section class="card hidden" id="noticeCard">
-      <h2>当前患者须知</h2>
-      <p id="doctorNoticeSummary" class="muted"></p>
-    </section>
-
-    <section class="card hidden" id="intakeLinkCard">
-      <h2>通用建档二维码</h2>
-      <p>新患者扫码后只能提交待审核申请，不能读取任何患者档案。</p>
-      <div id="intakeQr" class="qr"></div>
-      <p id="intakeExpiry" class="muted"></p>
-      <div class="row"><a id="openIntake" class="buttonLink" target="_blank" rel="noreferrer">打开新患者建档页</a><button type="button" id="revokeIntakeLink">撤销二维码</button><button type="button" class="secondary" id="closeIntakeLink">关闭</button></div>
-    </section>
-
-    <section class="card hidden" id="intakesCard">
-      <h2>建档申请审核</h2>
-      <p class="muted">批准后系统自动生成患者编号；系统不会仅凭同名自动合并患者。</p>
-      <div id="intakes"></div>
-    </section>
-
-    <section class="card hidden" id="newPatientCard">
-      <h2>新增患者</h2>
-      <form id="newPatientForm" class="form-grid">
-        <label for="patientName">患者显示名称</label>
-        <input id="patientName" required maxlength="100" placeholder="例如 虚构患者丙">
-        <p class="muted full-row">编号由系统生成。试用阶段不得录入真实姓名、手机号、证件号、病案号或真实临床信息。</p>
-        <div class="row full-row"><button type="submit">保存患者</button><button type="button" class="secondary" id="cancelNewPatient">取消</button></div>
-      </form>
-    </section>
-
-    <section class="card hidden" id="encounterCard">
-      <h2 id="encounterTitle">新增模拟就诊</h2>
-      <form id="encounterForm" class="form-grid">
-        <label for="encounterLabel">就诊说明</label>
-        <input id="encounterLabel" required maxlength="100" placeholder="例如 模拟第二次复诊">
-        <label for="occurredAt">就诊时间</label>
-        <input id="occurredAt" type="datetime-local" required>
-        <div class="row full-row"><button type="submit">保存模拟就诊</button><button type="button" class="secondary" id="cancelEncounter">取消</button></div>
-      </form>
-    </section>
-
-    <section class="card hidden" id="inviteCard">
-      <h2>邀请已生成</h2>
-      <p>请让患者用手机扫码，并尽量在门诊现场协助完成首次绑定。</p>
-      <div id="qr" class="qr"></div>
-      <p>6 位演示核验码（仅本次显示）</p>
-      <div id="code" class="secret"></div>
-      <p id="expiry" class="muted"></p>
-      <p class="muted">二维码不包含姓名、患者编号或诊断。核验码请口头告知或通过独立方式交给患者；本流程不是正式医疗身份认证。</p>
-      <div class="row"><a id="openInvite" class="buttonLink" target="_blank" rel="noreferrer">打开患者扫码页</a><button id="revokeInvite">撤销邀请</button><button id="closeInvite" class="secondary">关闭</button></div>
-    </section>
+    <section class="card hidden" id="noticeCard"><h2>当前患者须知</h2><p id="doctorNoticeSummary" class="muted"></p><div id="doctorNoticeContent" class="notice-fulltext"></div></section>
+    <section class="card hidden" id="intakesCard"><div class="toolbar"><div><h2>建档申请</h2><p class="muted">核对患者填写的基本信息与提交资料</p></div><div class="row"><button id="refreshIntakes" class="secondary">刷新申请</button><button id="createIntakeLink">录入姓名并生成专属码</button></div></div><div id="intakes"></div></section>
+    <section class="card hidden" id="placeholderCard"><div class="placeholder-content"><div><span class="placeholder-icon" aria-hidden="true">◷</span><h2 id="placeholderTitle"></h2><p id="placeholderDescription"></p><p>待建设</p></div></div></section>
     <div id="message" class="status hidden" role="status" aria-live="polite"></div>
   </main>
-  <script src="/static/doctor.js?v=20260911-5"></script>
-</body>
-</html>
+  <dialog id="newPatientCard" class="doctor-modal hidden" aria-labelledby="newPatientTitle"><h2 id="newPatientTitle">新增患者</h2><form id="newPatientForm" class="form-grid"><label for="patientName">患者姓名</label><input id="patientName" required maxlength="100" placeholder="请输入医生确认的姓名"><p class="muted full-row">保存后从档案顶部打开专属建档二维码。请使用虚构或去标识化测试资料。</p><p id="newPatientError" class="status error hidden full-row" role="alert"></p><div class="row full-row"><button type="submit">保存患者</button><button type="button" class="secondary" id="cancelNewPatient">取消</button></div></form></dialog>
+  <dialog id="inviteCard" class="doctor-modal hidden" aria-labelledby="qrTitle"><h2 id="qrTitle">患者专属建档二维码</h2><h3 id="qrPatientName"></h3><p>请妥善保管，可反复扫码阅读须知、填写信息和补交病历。</p><div id="qr" class="qr"></div><p id="expiry" class="muted"></p><p id="qrUrl" class="qr-url"></p><p class="muted">医生停用后，已打印的二维码也随即失效。</p><div class="row no-print"><a id="openInvite" class="buttonLink" target="_blank" rel="noreferrer">打开患者扫码页</a><button id="printInvite">打印二维码</button><button id="revokeInvite" class="secondary">停用二维码</button><button id="closeInvite" class="secondary">关闭</button></div></dialog>
+  <script src="/static/session.js?v=20261020"></script><script src="/static/doctor-shell.js?v=20261020-3"></script><script src="/static/doctor.js?v=20261024-workspace-1"></script>
+</body></html>

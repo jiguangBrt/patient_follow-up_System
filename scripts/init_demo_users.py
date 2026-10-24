@@ -1,5 +1,5 @@
+import os
 import sys
-from getpass import getpass
 from pathlib import Path
 
 from sqlalchemy import select
@@ -18,59 +18,32 @@ DEMO_USERS = (
     ("demo_doctor", "虚构医生（演示）", UserRole.DOCTOR),
     ("demo_patient", "虚构患者（演示）", UserRole.PATIENT),
 )
-
-
-def read_password(username: str) -> str:
-    password = getpass(f"请输入 {username} 的演示密码（至少 12 个字符，不会回显）: ")
-    if len(password) < 12:
-        raise ValueError(f"{username} 的演示密码少于 12 个字符")
-
-    confirmation = getpass(f"请再次输入 {username} 的演示密码: ")
-    if password != confirmation:
-        raise ValueError(f"{username} 的两次密码输入不一致")
-    return password
+# Local demo only. Never use this password outside an isolated development setup.
+DEMO_PASSWORD = "123456"
 
 
 def main() -> None:
+    if os.getenv("APP_ENV", "development").lower() not in {"development", "local", "test"}:
+        raise SystemExit("此脚本仅用于本地演示，不允许重置服务器账号。")
     with SessionLocal() as session:
-        existing_usernames = set(
-            session.scalars(
-                select(User.username).where(
-                    User.username.in_(username for username, _, _ in DEMO_USERS)
-                )
-            )
-        )
-        missing_users = [
-            demo_user
-            for demo_user in DEMO_USERS
-            if demo_user[0] not in existing_usernames
-        ]
+        for username, display_name, role in DEMO_USERS:
+            user = session.scalar(select(User).where(User.username == username))
+            if user is None:
+                user = User(username=username, display_name=display_name)
+                session.add(user)
 
-        if not missing_users:
-            print("DEMO_USERS_ALREADY_EXIST=True")
-            return
-
-        passwords = {
-            username: read_password(username)
-            for username, _, _ in missing_users
-        }
-
-        for username, display_name, role in missing_users:
-            session.add(
-                User(
-                    username=username,
-                    display_name=display_name,
-                    password_hash=hash_password(passwords[username]),
-                    role=role,
-                    is_active=True,
-                )
-            )
+            user.display_name = display_name
+            user.password_hash = hash_password(DEMO_PASSWORD)
+            user.role = role
+            user.is_active = True
 
         session.commit()
 
-        for username, display_name, role in missing_users:
-            print(f"CREATED={username},{role.value},{display_name}")
-        print(f"DEMO_USERS_CREATED={len(missing_users)}")
+        print("演示账号已创建或重置：")
+        for username, display_name, role in DEMO_USERS:
+            print(f"  {username} ({role.value}) - {display_name}")
+        print(f"统一演示密码：{DEMO_PASSWORD}")
+        print("仅限本地演示使用，请勿用于云端或真实患者数据。")
 
 
 if __name__ == "__main__":

@@ -45,7 +45,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .form-grid label { font-weight: 700; }
 .form-grid input { width: 100%; }
 .full-row { grid-column: 1 / -1; }
-.qr svg { width: min(280px, 100%); height: auto; }
+.qr svg { display: block; width: min(280px, 100%); height: auto; aspect-ratio: 1; }
 .secret { font: 700 26px ui-monospace, monospace; letter-spacing: 3px; padding: 14px; background: #fff7df; border-radius: 10px; display: inline-block; }
 .hidden { display: none; }
 .mobile { max-width: 460px; margin: 24px auto; }

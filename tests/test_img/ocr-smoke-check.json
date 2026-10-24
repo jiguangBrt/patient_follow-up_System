@@ -1,0 +1,97 @@
+[
+  {
+    "file": "img/测试小土豆-01.png",
+    "status": "ready",
+    "document_type": "outpatient",
+    "expected_name": "测试小土豆",
+    "recognized_name": "测试小土豆",
+    "nonempty_fields": 24,
+    "source_group": "basic"
+  },
+  {
+    "file": "img/虚构小南瓜-02.png",
+    "status": "ready",
+    "document_type": "outpatient",
+    "expected_name": "虚构小南瓜",
+    "recognized_name": "虚构小南瓜",
+    "nonempty_fields": 24,
+    "source_group": "basic"
+  },
+  {
+    "file": "img/测试小蘑菇-03.png",
+    "status": "ready",
+    "document_type": "outpatient",
+    "expected_name": "测试小蘑菇",
+    "recognized_name": "测试小蘑菇",
+    "nonempty_fields": 25,
+    "source_group": "basic"
+  },
+  {
+    "file": "img/假人小海带-04.png",
+    "status": "ready",
+    "document_type": "outpatient",
+    "expected_name": "假人小海带",
+    "recognized_name": "假人小海带",
+    "nonempty_fields": 21,
+    "source_group": "basic"
+  },
+  {
+    "file": "img/测试小面包-05.png",
+    "status": "ready",
+    "document_type": "outpatient",
+    "expected_name": "测试小面包",
+    "recognized_name": "测试小面包",
+    "nonempty_fields": 24,
+    "source_group": "basic"
+  },
+  {
+    "file": "img/测试小蘑菇-06.png",
+    "status": "ready",
+    "expected_name": "测试小蘑菇",
+    "recognized_name": "测试小蘑菇",
+    "expected_visit_time": "2026-09-24 09:36:18",
+    "recognized_visit_time": "2026-09-2409:36：18",
+    "nonempty_fields": 23,
+    "source_group": "harder"
+  },
+  {
+    "file": "img/测试小蘑菇-07.png",
+    "status": "ready",
+    "expected_name": "测试小蘑菇",
+    "recognized_name": "测试小蘑菇",
+    "expected_visit_time": "2026-10-15 14:22:31",
+    "recognized_visit_time": "2026-10-1514:22:31",
+    "nonempty_fields": 21,
+    "source_group": "harder"
+  },
+  {
+    "file": "img/测试小蘑菇-08.png",
+    "status": "ready",
+    "expected_name": "测试小蘑菇",
+    "recognized_name": "测试小蘑菇",
+    "expected_visit_time": "2026-10-20 10:08:47",
+    "recognized_visit_time": "2026-10-2010:08：47",
+    "nonempty_fields": 20,
+    "source_group": "harder"
+  },
+  {
+    "file": "img/测试小面包-09.png",
+    "status": "ready",
+    "expected_name": "测试小面包",
+    "recognized_name": "测试小面包",
+    "expected_visit_time": "2026-10-20 11:35:09",
+    "recognized_visit_time": "2026-10-2011:35:09",
+    "nonempty_fields": 22,
+    "source_group": "harder"
+  },
+  {
+    "file": "img/假人小海带-10.png",
+    "status": "ready",
+    "expected_name": "假人小海带",
+    "recognized_name": "假人小海带",
+    "expected_visit_time": "2026-10-20 15:16:42",
+    "recognized_visit_time": "2026-10-2015：16：42",
+    "nonempty_fields": 20,
+    "source_group": "harder"
+  }
+]

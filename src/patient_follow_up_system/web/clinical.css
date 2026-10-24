@@ -1,0 +1,56 @@
+.clinical-main { max-width:none; }
+.clinical-review-open { overflow:hidden; }
+.clinical-review-open .clinical-main { height:100dvh; display:flex; flex-direction:column; padding-top:16px; padding-bottom:16px; }
+.clinical-review-open .workspace-topbar { display:none; }
+.clinical-review-open #uploadCard,.clinical-review-open #bufferCard { display:none; }
+.doctor-app.clinical-review-open #message:not(.hidden) { position:static; flex-shrink:0; margin:0 0 10px; padding:7px 12px; }
+.doctor-app #reviewCard:not(.hidden) { display:flex; flex-direction:column; flex:1; min-height:0; margin-bottom:0; padding:18px 22px; position:relative; overflow:hidden; }
+.review-header { flex-shrink:0; }
+.review-header .toolbar h2 { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; min-width:0; }
+.review-header .muted { margin:5px 0; }
+.review-header .review-help { margin-top:8px; }
+.clinical-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; margin:14px 0; flex:1; min-height:0; overflow:hidden; }
+.evidence-panel { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
+.evidence-panel select { min-width:80px; margin-left:12px; }
+#evidenceText { flex-shrink:0; max-height:3.6em; overflow:hidden; margin:8px 0; }
+#previewStage { flex:1; min-height:0; min-width:0; display:grid; place-items:center; background:#edf2f5; overflow:hidden; }
+#previewWrap { position:relative; max-width:100%; max-height:100%; }
+#preview { width:100%; height:100%; display:block; }
+#highlight { position:absolute; border:3px solid #da6c00; background:#ffcc4422; pointer-events:none; }
+#fields { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-right:8px; scrollbar-gutter:stable; }
+.field-review { padding:12px 14px; border:1px solid #dbe6ee; border-radius:10px; margin-bottom:10px; }
+.field-review h3 { margin:0 0 5px; font-size:15px; }
+.field-review textarea { width:100%; min-width:0; min-height:68px; margin:5px 0; }
+.field-review .row { gap:8px; }
+.field-review .row:empty { display:none; }
+.review-actions { flex-shrink:0; display:grid; grid-template-columns:minmax(0,1fr) 190px auto; column-gap:18px; align-items:center; background:#fff; border-top:1px solid #dbe6ee; padding-top:12px; }
+.review-target {grid-column:1; min-width:0;}
+.review-date {grid-column:2; display:grid; gap:5px;}
+.review-date input {width:100%;min-width:0;}
+.review-date small {color:#8191a0;font-size:11px;}
+.review-actions > .row { grid-column:3; grid-row:1; }
+.review-actions > p { grid-column:1 / -1; grid-row:2; }
+#targetPatient { display:block; width:100%; margin:7px 0; }
+#targetPatient { min-width:0; }
+.review-actions .muted { margin:6px 0 10px; }
+#historyText { position:absolute; top:90px; right:22px; width:calc(50% - 34px); max-height:45%; padding:16px; z-index:5; white-space:pre-wrap; overflow-wrap:anywhere; overflow:auto; background:#f6f9fb; border:1px solid #dbe6ee; box-shadow:0 4px 18px #17324d22; }
+#documentMeta { display:none; }
+@media(min-width:801px) and (max-width:1250px) {
+  .review-actions {grid-template-columns:minmax(0,1fr) 165px;}
+  .review-actions > .row {grid-column:1 / -1;grid-row:2;justify-content:flex-end;}
+  .review-actions > p {grid-row:3;}
+}
+@media(max-width:800px) {
+  .clinical-review-open .clinical-main { margin-left:0; padding:0 12px 12px; }
+  .clinical-review-open .doctor-sidebar,.clinical-review-open .workspace-topbar { display:none; }
+  .doctor-app #reviewCard:not(.hidden) { padding:12px; margin-top:10px; }
+  .clinical-grid { gap:10px; grid-template-columns:minmax(0,2fr) minmax(0,3fr); }
+  .review-header .muted,.review-help,#evidenceText { display:none; }
+  .review-header .row { gap:6px; margin-top:8px; }
+  .doctor-app .review-header button { padding:6px 8px; font-size:11px; }
+  .evidence-panel select { margin-left:0; min-width:0; width:100%; }
+  .field-review { padding:8px; }
+  .review-actions .muted { display:none; }
+  .review-actions { display:block; }
+  .review-actions .row { gap:8px; }
+}

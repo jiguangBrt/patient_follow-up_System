@@ -1,413 +1,152 @@
-const $ = (id) => document.getElementById(id);
-let token = sessionStorage.getItem("doctorToken");
+const $ = id => document.getElementById(id);
+let token = AppSession.require("doctor");
+let doctorPatients = [];
+let selectedPatientId = null;
+let doctorId = null;
+let selectionEpoch = 0;
 let currentInvitationId = null;
-let currentIntakeLinkId = null;
-let selectedPatient = null;
-
-function message(text, error = false) {
-  $("message").textContent = text;
-  $("message").className = `status ${error ? "error" : "success"}`;
-}
-
-async function api(path, options = {}) {
-  options.headers = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-  const response = await fetch(path, options);
-  const contentType = response.headers.get("content-type") || "";
-  const data = contentType.includes("application/json") ? await response.json() : null;
-  if (!response.ok) throw new Error(data?.detail || `请求失败（${response.status}）`);
+let openNewPatientAfterView = false;
+const stateNames = {pending:"等待医生审核", approved:"已批准", rejected:"已驳回", buffered:"待医生确认", filed:"已归档"};
+function node(tag, text, className) { const el=document.createElement(tag); if(text!=null)el.textContent=text; if(className)el.className=className; return el; }
+function message(text,error=false) { $("message").textContent=text; $("message").className=`status ${error?"error":"success"}`; }
+async function api(path,options={}) {
+  const response=await AppPaths.fetch(path,{...options,headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
+  const data=await response.json();
+  if(!response.ok){if(response.status===401)AppSession.logout("doctor",true);throw new Error(typeof data.detail==="string"?data.detail:`请求失败（${response.status}）`);}
   return data;
 }
-
-function actionButton(text, action, secondary = false) {
-  const button = document.createElement("button");
-  button.textContent = text;
-  if (secondary) button.className = "secondary";
-  button.onclick = action;
+function actionButton(text,action,secondary=false) {
+  const button=node("button",text,secondary?"secondary":""); button.type="button";
+  button.onclick=async()=>{button.disabled=true;try{await action();}catch(error){message(error.message,true);}finally{button.disabled=false;}};
   return button;
 }
-
-function detailLine(label, value) {
-  const row = document.createElement("p");
-  const strong = document.createElement("strong");
-  strong.textContent = `${label}：`;
-  row.append(strong, document.createTextNode(value));
-  return row;
+function detailLine(label,value) {const p=node("p");p.append(node("strong",`${label}：`),document.createTextNode(value));return p;}
+function showModal(id) {const modal=$(id);modal.classList.remove("hidden");if(!modal.open)modal.showModal();}
+function closeModal(id) {if($(id).open)$(id).close();$(id).classList.add("hidden");}
+function activateDoctorView() {
+  const views={patients:["患者管理","诊疗管理","patientsCard"],intakes:["建档申请","诊疗管理","intakesCard"],notice:["患者须知","设置","noticeCard"],followups:["随访计划","随访与科研","placeholderCard","随访节点与复诊提醒将在这里管理。"],cohorts:["科研队列","随访与科研","placeholderCard","研究分组与队列将在这里管理。"],exports:["资料导出","随访与科研","placeholderCard","资料导出将在这里提供。"]};
+  const key=Object.hasOwn(views,location.hash.slice(1))?location.hash.slice(1):"patients";
+  const [title,group,card,description]=views[key];
+  ["patientsCard","intakesCard","noticeCard","placeholderCard"].forEach(id=>$(id).classList.toggle("hidden",id!==card));
+  closeModal("inviteCard");closeModal("newPatientCard");document.body.classList.toggle("patients-view",key==="patients");
+  $("pageTitle").textContent=title;$("breadcrumb").textContent=`${group} / ${title}`;DoctorShell.activate(key);$("message").classList.add("hidden");
+  if(description){$("placeholderTitle").textContent=title;$("placeholderDescription").textContent=description;}
+  if(key==="intakes")loadIntakes();
+  if(key==="patients"&&openNewPatientAfterView){openNewPatientAfterView=false;$("showNewPatient").click();}
 }
-
-async function showPatientDetails(patient, details) {
-  if (!details.classList.contains("hidden")) {
-    details.classList.add("hidden");
-    return;
+function renderPatients() {
+  const query=$("patientSearch").value.trim().toLowerCase();const items=doctorPatients.filter(p=>`${p.display_name} ${p.patient_code}`.toLowerCase().includes(query));
+  $("patientCounts").textContent=`共 ${doctorPatients.length} 位患者`;
+  $("patients").replaceChildren(...items.map(patient=>{
+    const button=actionButton(patient.display_name,()=>selectPatient(patient.id));button.className=`patient-name-button ${patient.id===selectedPatientId?"selected":""}`;
+    button.setAttribute("aria-pressed",String(patient.id===selectedPatientId));button.dataset.patientId=patient.id;button.title=patient.patient_code;return button;
+  }));
+  if(!items.length)$("patients").append(node("p",query?"没有匹配的患者":"暂无患者，请先新增患者。","muted"));
+}
+async function loadPatients(preferred=selectedPatientId) {
+  doctorPatients=await api("/patients");
+  const stored=Number(AppPaths.storage.getItem(`selectedPatient:${doctorId}`));
+  const chosen=doctorPatients.find(p=>p.id===preferred)||doctorPatients.find(p=>p.id===stored)||doctorPatients[0];
+  if(chosen)await selectPatient(chosen.id);
+  else {
+    selectedPatientId=null;selectionEpoch++;AppPaths.storage.removeItem(`selectedPatient:${doctorId}`);renderPatients();$("patientHeading").textContent="还没有患者";$("patientMeta").textContent="请从左侧新增患者，开始建档与资料整理。";
+    $("showPatientQr").disabled=true;$("refreshPatient").disabled=true;$("patientDetailScroll").replaceChildren(emptyState("暂无患者档案","点击“新增患者”，填写姓名后即可生成专属建档二维码。"));
   }
-  details.classList.remove("hidden");
-  details.replaceChildren(
-    detailLine("系统患者编号", patient.patient_code),
-    detailLine("显示名称", patient.display_name),
-    detailLine("账号绑定状态", patient.is_bound ? "已绑定" : "尚未绑定"),
-    detailLine("建档时间", new Date(patient.created_at).toLocaleString()),
-  );
+}
+function emptyState(title,description) {const el=node("div",null,"patient-empty");el.append(node("h2",title),node("p",description));return el;}
+async function selectPatient(id) {
+  const patient=doctorPatients.find(p=>p.id===id);if(!patient)return;
+  const changed=selectedPatientId!==id;selectedPatientId=id;const epoch=++selectionEpoch;
+  AppPaths.storage.setItem(`selectedPatient:${doctorId}`,String(id));closeModal("inviteCard");currentInvitationId=null;renderPatients();
+  $("patientHeading").textContent=patient.display_name;$("patientMeta").textContent=patient.patient_code;$("showPatientQr").disabled=false;$("refreshPatient").disabled=false;
+  const pane=$("patientDetailScroll");const position=changed?0:pane.scrollTop;pane.replaceChildren(node("p","正在加载患者资料…","muted"));
   try {
-    const [encounters, documents] = await Promise.all([
-      api(`/patients/${patient.id}/encounters`),
-      api(`/patients/${patient.id}/documents`),
-    ]);
-    const timelineHeading = document.createElement("h4");
-    timelineHeading.textContent = "随访资料与时间轴";
-    details.append(timelineHeading);
-    if (!documents.length) {
-      const empty = document.createElement("p");
-      empty.className = "muted";
-      empty.textContent = "尚无患者提交的随访资料。";
-      details.append(empty);
-    } else {
-      documents.forEach(record => details.append(doctorDocumentCard(record, patient, details)));
+    const data=await api(`/patients/${id}/workspace`);if(epoch!==selectionEpoch||selectedPatientId!==id)return;
+    const profile=data.profile;
+    $("patientMeta").textContent=profile?`${patient.patient_code} · ${profile.sex} · 生日 ${profile.date_of_birth} · 操作员 ${profile.operator_relationship}`:`${patient.patient_code} · 尚未提交基本信息`;
+    pane.replaceChildren();
+    const overview=node("div",null,"patient-overview");overview.append(node("span",profile?`建档状态：${stateNames[profile.status]||profile.status} · 须知版本 ${profile.notice_version||"未记录"}`:"患者扫码后可填写基本信息并补交病历。"));
+    if(profile?.status==="pending")overview.append(actionButton("审核建档申请",()=>{location.hash="intakes";},true));
+    pane.append(overview);
+    if(data.unfiled.length)pane.append(unfiledModule(data.unfiled));
+    data.visits.forEach(visit=>pane.append(visitModule(visit)));
+    if(!data.visits.length)pane.append(emptyState("暂无已归档就诊","病历识别后请核对就诊日期并确认归档，同一天的资料会自动合并展示。"));
+    pane.scrollTop=position;
+  }catch(error){if(epoch===selectionEpoch)pane.replaceChildren(emptyState("资料暂时无法加载",error.message));}
+}
+function moduleShell(title,count,className="visit-module") {
+  const section=node("section",null,className);const head=node("div",null,"visit-module-heading");head.append(node("h2",title),node("span",count));section.append(head);return section;
+}
+function clinicalUrl(item) {return item.kind==="clinical"?`/clinical?id=${item.id}`:`/clinical?source=${item.kind}&id=${item.id}`;}
+function visitModule(visit) {
+  const section=moduleShell(visit.date?`${visit.date} · 就诊记录`:"日期待确认 · 历史就诊",`${visit.records.length} 份记录 · 已归档`);
+  visit.records.forEach(record=>{
+    const article=node("article",null,"record-content");article.append(node("h3",record.original_name||record.label||"就诊资料"));
+    if(record.fields?.length){const dl=node("dl",null,"record-fields");record.fields.forEach(field=>dl.append(node("dt",field.label),node("dd",field.value)));article.append(dl);}
+    if(record.summary)article.append(node("p",record.summary));
+    if(record.kind!=="encounter"){
+      const actions=node("div",null,"row");actions.append(actionButton("查看原件",()=>openOriginal(record.kind,record.id),true));
+      if(record.kind==="clinical")actions.append(actionButton("查看审核记录",()=>{location.href=AppPaths.url(clinicalUrl(record));},true));
+      article.append(actions);
     }
-
-    const heading = document.createElement("h4");
-    heading.textContent = "模拟就诊记录";
-    details.append(heading);
-    if (!encounters.length) {
-      const empty = document.createElement("p");
-      empty.className = "muted";
-      empty.textContent = "尚无模拟就诊记录。";
-      details.append(empty);
-    } else {
-      encounters.forEach((encounter) => {
-        const item = document.createElement("div");
-        item.className = "encounter-item";
-        const text = document.createElement("div");
-        const title = document.createElement("strong");
-        title.textContent = encounter.display_label;
-        const meta = document.createElement("div");
-        meta.className = "muted";
-        meta.textContent = `${encounter.encounter_code} · ${new Date(encounter.occurred_at).toLocaleString()}`;
-        text.append(title, meta);
-        item.append(text, actionButton("为本次就诊生成邀请", () => createInvite(patient.id, encounter.id), true));
-        details.append(item);
-      });
-    }
-  } catch (error) {
-    message(error.message, true);
-  }
+    section.append(article);
+  });return section;
 }
-
-function doctorDocumentCard(record, patient, details) {
-  const item = document.createElement("article");
-  item.className = `timeline-item ${record.review_status}`;
-  item.append(
-    detailLine("患者填写", `${record.event_date} · ${record.display_label}`),
-    detailLine("患者说明", record.patient_note || "未填写"),
-    detailLine("审核状态", { pending: "待审核", approved: "已确认进入时间轴", rejected: "已驳回" }[record.review_status]),
-    detailLine("资料处理", record.extraction_status === "not_run" ? "OCR 未运行，等待人工审核" : record.extraction_status),
-    detailLine("须知记录", `${record.notice_version} · ${new Date(record.consented_at).toLocaleString()}`),
-  );
-  item.append(actionButton("查看原始资料", () => openPatientDocument(record.id), true));
-  if (record.review_status === "approved") {
-    item.append(
-      detailLine("确认事件", `${record.confirmed_event_date} · ${record.confirmed_label}`),
-      detailLine("医生摘要", record.doctor_summary),
-    );
-  } else if (record.review_status === "rejected") {
-    item.append(detailLine("审核说明", record.doctor_summary || "未填写"));
-  } else {
-    const form = document.createElement("div");
-    form.className = "review-grid";
-    const dateLabel = document.createElement("label");
-    dateLabel.textContent = "确认事件日期";
-    const dateInput = document.createElement("input");
-    dateInput.type = "date";
-    dateInput.value = record.event_date;
-    const titleLabel = document.createElement("label");
-    titleLabel.textContent = "确认资料名称";
-    const titleInput = document.createElement("input");
-    titleInput.value = record.display_label;
-    titleInput.maxLength = 100;
-    const summaryLabel = document.createElement("label");
-    summaryLabel.textContent = "医生确认摘要";
-    const summaryInput = document.createElement("textarea");
-    summaryInput.maxLength = 1000;
-    summaryInput.placeholder = "仅填写从虚构或去标识化原件中人工确认的内容";
-    form.append(dateLabel, dateInput, titleLabel, titleInput, summaryLabel, summaryInput);
-    const actions = document.createElement("div");
-    actions.className = "row full-row";
-    actions.append(
-      actionButton("确认并进入时间轴", () => reviewPatientDocument(record.id, "approve", {
-        confirmed_event_date: dateInput.value,
-        confirmed_label: titleInput.value.trim(),
-        doctor_summary: summaryInput.value.trim(),
-      }, patient, details)),
-      actionButton("驳回资料", () => reviewPatientDocument(record.id, "reject", {
-        doctor_summary: summaryInput.value.trim() || null,
-      }, patient, details), true),
-    );
-    form.append(actions);
-    item.append(form);
-  }
-  return item;
+function unfiledModule(records) {
+  const section=moduleShell("待整理与未归档资料",`${records.length} 份资料`,"unfiled-module");
+  records.forEach(record=>{
+    const article=node("article",null,"record-content");article.append(node("h3",record.original_name),node("p",`${stateNames[record.status]||record.status} · ${record.candidate_date?`识别/暂存日期：${record.candidate_date}（待确认）`:"就诊日期待识别或补填"}`,"muted"));
+    const actions=node("div",null,"row");actions.append(actionButton("查看原件",()=>openOriginal(record.kind,record.id),true),actionButton(record.status==="rejected"?"查看审核记录":"识别并审核",()=>{location.href=AppPaths.url(clinicalUrl(record));},true));article.append(actions);section.append(article);
+  });return section;
 }
-
-async function openPatientDocument(documentId) {
-  const response = await fetch(`/patient-documents/${documentId}/file`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!response.ok) { message("原始资料暂时无法打开", true); return; }
-  const url = URL.createObjectURL(await response.blob());
-  window.open(url, "_blank", "noopener");
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
+async function openOriginal(kind,id) {
+  const paths={clinical:`/clinical-documents/${id}/file`,patient:`/patient-documents/${id}/file`,intake:`/intake-submissions/${id}/document`};
+  const response=await AppPaths.fetch(paths[kind],{headers:{Authorization:`Bearer ${token}`}});
+  if(!response.ok){if(response.status===401)AppSession.logout("doctor",true);const error=await response.json().catch(()=>({}));throw new Error(error.detail||"原件暂时无法打开");}
+  const url=URL.createObjectURL(await response.blob());window.open(url,"_blank","noopener");setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
-
-async function reviewPatientDocument(documentId, action, fields, patient, details) {
+async function createInvite() {
+  const id=selectedPatientId;if(!id)return;$("showPatientQr").disabled=true;
   try {
-    await api(`/patient-documents/${documentId}/review`, {
-      method: "POST",
-      body: JSON.stringify({ action, ...fields }),
-    });
-    message(action === "approve" ? "资料已确认并进入患者时间轴" : "资料已驳回");
-    details.classList.add("hidden");
-    await showPatientDetails(patient, details);
-  } catch (error) {
-    message(error.message, true);
-  }
+    const data=await api(`/patients/${id}/intake-link`,{method:"POST"});if(id!==selectedPatientId)return;
+    currentInvitationId=data.id;$("qr").innerHTML=data.qr_svg;$("qrPatientName").textContent=data.display_name;$("openInvite").href=data.intake_url;$("qrUrl").textContent=data.intake_url;
+    const revoked=data.state!=="available";$("expiry").textContent=revoked?"此码已停用，患者无法继续使用。":"长期有效 · 可重复扫码 · 无需核验码";
+    $("printInvite").disabled=revoked;$("revokeInvite").disabled=revoked;$("openInvite").classList.toggle("hidden",revoked);showModal("inviteCard");
+  }catch(error){message(error.message,true);}finally{$("showPatientQr").disabled=!selectedPatientId;}
 }
-
-function patientCard(patient) {
-  const card = document.createElement("article");
-  card.className = "patient-card-wide";
-  const summary = document.createElement("div");
-  summary.className = "patient-summary";
-  const text = document.createElement("div");
-  const name = document.createElement("h3");
-  name.textContent = patient.display_name;
-  const code = document.createElement("div");
-  code.className = "muted";
-  code.textContent = patient.patient_code;
-  const badge = document.createElement("span");
-  badge.className = `badge ${patient.is_bound ? "bound" : "unbound"}`;
-  badge.textContent = patient.is_bound ? "已关联患者账号" : "尚未关联患者账号";
-  badge.title = patient.is_bound ? "患者可使用自己的账号访问该档案" : "档案已建立，等待患者通过专属邀请认领";
-  text.append(name, code, badge);
-  const actions = document.createElement("div");
-  actions.className = "row patient-actions";
-  const details = document.createElement("div");
-  details.className = "patient-details hidden";
-  actions.append(
-    actionButton("基本情况", () => showPatientDetails(patient, details), true),
-    actionButton("新增就诊", () => openEncounterForm(patient), true),
-    actionButton("生成邀请", () => createInvite(patient.id)),
-  );
-  summary.append(text, actions);
-  card.append(summary, details);
-  return card;
+async function reviewIntake(submission,action) {
+  await api(`/intake-submissions/${submission.id}/review`,{method:"POST",body:JSON.stringify({action})});await loadIntakes();await loadPatients();message(action==="approve"?"已批准，可在患者档案中查看":"申请已驳回");
 }
-
-async function loadPatients() {
-  try {
-    const items = await api("/patients");
-    $("loginCard").classList.add("hidden");
-    $("patientsCard").classList.remove("hidden");
-    $("patients").replaceChildren(...items.map(patientCard));
-  } catch (error) {
-    sessionStorage.removeItem("doctorToken");
-    token = null;
-    message(error.message, true);
-  }
-}
-
-function openEncounterForm(patient) {
-  selectedPatient = patient;
-  $("encounterTitle").textContent = `为 ${patient.display_name} 新增模拟就诊`;
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  $("occurredAt").value = now.toISOString().slice(0, 16);
-  $("encounterCard").classList.remove("hidden");
-  $("encounterCard").scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-async function createInvite(patientId, encounterId = null) {
-  try {
-    const data = await api(`/patients/${patientId}/invitations`, {
-      method: "POST",
-      body: JSON.stringify({
-        encounter_id: encounterId,
-        expires_in_minutes: 60,
-        max_uses: 1,
-      }),
-    });
-    currentInvitationId = data.id;
-    $("qr").innerHTML = data.qr_svg;
-    $("code").textContent = data.verification_code;
-    $("openInvite").href = data.invitation_url;
-    $("expiry").textContent = `有效期至 ${new Date(data.expires_at).toLocaleString()}`;
-    $("inviteCard").classList.remove("hidden");
-    $("inviteCard").scrollIntoView({ behavior: "smooth", block: "start" });
-  } catch (error) {
-    message(error.message, true);
-  }
-}
-
-async function createIntakeLink() {
-  try {
-    const data = await api("/intake-links", { method: "POST", body: "{}" });
-    currentIntakeLinkId = data.id;
-    $("intakeQr").innerHTML = data.qr_svg;
-    $("openIntake").href = data.intake_url;
-    $("intakeExpiry").textContent = `有效期至 ${new Date(data.expires_at).toLocaleString()}`;
-    $("intakeLinkCard").classList.remove("hidden");
-    $("intakeLinkCard").scrollIntoView({ behavior: "smooth", block: "start" });
-  } catch (error) {
-    message(error.message, true);
-  }
-}
-
-async function reviewIntake(submission, action) {
-  try {
-    await api(`/intake-submissions/${submission.id}/review`, {
-      method: "POST",
-      body: JSON.stringify({ action }),
-    });
-    message(action === "approve" ? "申请已批准并进入患者库" : "申请已驳回");
-    await loadIntakes();
-    await loadPatients();
-  } catch (error) {
-    message(error.message, true);
-  }
-}
-
-async function openIntakeDocument(submissionId) {
-  const response = await fetch(`/intake-submissions/${submissionId}/document`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!response.ok) { message("原始资料暂时无法打开", true); return; }
-  const url = URL.createObjectURL(await response.blob());
-  window.open(url, "_blank", "noopener");
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-}
-
 async function loadIntakes() {
   try {
-    const items = await api("/intake-submissions");
-    $("intakesCard").classList.remove("hidden");
-    $("intakes").replaceChildren(...items.map((submission) => {
-      const item = document.createElement("article");
-      item.className = "patient-card-wide";
-      item.append(
-        detailLine("演示称呼", submission.display_name),
-        detailLine("基本信息", `${submission.sex} · ${submission.date_of_birth} · ${submission.operator_relationship}`),
-        detailLine("状态", submission.status),
-        detailLine("演示同意", submission.consented_at ? `${submission.notice_version} · ${new Date(submission.consented_at).toLocaleString()}${submission.consent_is_legacy_incomplete ? " · 历史内容快照不完整" : ""}` : "未记录"),
-        detailLine("资料处理", submission.extraction_status === "pending" ? "原件已保存，待提取/审核" : submission.extraction_status),
-      );
-      item.append(actionButton("查看原始资料", () => openIntakeDocument(submission.id), true));
-      if (submission.status === "pending") {
-        const actions = document.createElement("div");
-        actions.className = "row";
-        actions.append(
-          actionButton("批准并生成患者编号", () => reviewIntake(submission, "approve")),
-          actionButton("驳回", () => reviewIntake(submission, "reject"), true),
-        );
-        item.append(actions);
-      }
-      return item;
-    }));
-  } catch (error) {
-    message(error.message, true);
-  }
+    const items=await api("/intake-submissions");$("intakes").replaceChildren(...items.map(submission=>{
+      const item=node("article",null,"patient-card-wide");item.append(detailLine("患者姓名",submission.display_name),detailLine("基本信息",`${submission.sex} · ${submission.date_of_birth} · ${submission.operator_relationship}`),detailLine("状态",stateNames[submission.status]||submission.status),detailLine("资料",submission.has_document?"原件已保存，待识别核对":"仅提交基本信息，未上传病历"));
+      const bar=node("div",null,"intake-action-bar");
+      if(submission.has_document){const actions=node("div",null,"intake-document-actions");actions.append(actionButton("查看原始资料",()=>openOriginal("intake",submission.id),true),actionButton("识别并逐字段审核",()=>{location.href=AppPaths.url(`/clinical?source=intake&id=${submission.id}`);},true));bar.append(actions);}
+      if(submission.status==="pending"){const actions=node("div",null,"intake-review-actions");const reject=actionButton("驳回",()=>reviewIntake(submission,"reject"));reject.className="danger";actions.append(actionButton("批准",()=>reviewIntake(submission,"approve")),reject);bar.append(actions);}
+      item.append(bar);return item;
+    }));if(!items.length)$("intakes").append(node("p","暂无建档申请。请先在患者管理中录入姓名并生成专属建档码。","muted"));
+  }catch(error){message(error.message,true);}
 }
-
-async function loadCurrentNotice() {
-  try {
-    const notice = await api("/doctor/patient-notices/current");
-    $("doctorNoticeSummary").textContent = `${notice.title} · 版本 ${notice.version} · 已发布并生效`;
-    $("noticeCard").classList.remove("hidden");
-  } catch (error) { message(error.message, true); }
-}
-
-$("loginForm").onsubmit = async (event) => {
-  event.preventDefault();
-  try {
-    const data = await api("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({
-        username: $("username").value,
-        password: $("password").value,
-      }),
-    });
-    token = data.access_token;
-    sessionStorage.setItem("doctorToken", token);
-    $("password").value = "";
-    await Promise.all([loadPatients(), loadCurrentNotice()]);
-  } catch (error) {
-    message(error.message, true);
-  }
+async function loadCurrentNotice() {const notice=await api("/doctor/patient-notices/current");$("doctorNoticeSummary").textContent=`${notice.title} · 版本 ${notice.version}`;$("doctorNoticeContent").textContent=notice.content;}
+$("newPatientForm").onsubmit=async event=>{
+  event.preventDefault();const button=event.target.querySelector('button[type="submit"]');button.disabled=true;
+  try {const patient=await api("/patients",{method:"POST",body:JSON.stringify({display_name:$("patientName").value.trim()})});event.target.reset();closeModal("newPatientCard");await loadPatients(patient.id);message("患者已保存，可从档案顶部打开建档二维码。");}
+  catch(error){$("newPatientError").textContent=error.message;$("newPatientError").classList.remove("hidden");}finally{button.disabled=false;}
 };
-
-$("newPatientForm").onsubmit = async (event) => {
-  event.preventDefault();
-  try {
-    await api("/patients", {
-      method: "POST",
-      body: JSON.stringify({
-        display_name: $("patientName").value.trim(),
-      }),
-    });
-    event.target.reset();
-    $("newPatientCard").classList.add("hidden");
-    message("患者已建档，系统已自动生成患者编号");
-    await loadPatients();
-  } catch (error) {
-    message(error.message, true);
-  }
+$("showNewPatient").onclick=()=>{$("newPatientError").classList.add("hidden");showModal("newPatientCard");$("patientName").focus();};
+$("cancelNewPatient").onclick=()=>closeModal("newPatientCard");
+$("createIntakeLink").onclick=()=>{openNewPatientAfterView=true;if(location.hash==="#patients")activateDoctorView();else location.hash="patients";};
+$("refreshIntakes").onclick=loadIntakes;$("patientSearch").oninput=renderPatients;
+$("showPatientQr").onclick=createInvite;$("refreshPatient").onclick=()=>loadPatients().catch(error=>message(error.message,true));
+$("printInvite").onclick=()=>window.print();$("closeInvite").onclick=()=>closeModal("inviteCard");
+$("revokeInvite").onclick=async()=>{
+  if(!currentInvitationId)return;$("revokeInvite").disabled=true;
+  try {await api(`/intake-links/${currentInvitationId}/revoke`,{method:"POST"});$("expiry").textContent="此码已停用，已打印的二维码也无法继续使用。";$("printInvite").disabled=true;$("openInvite").classList.add("hidden");}
+  catch(error){$("expiry").textContent=error.message;$("revokeInvite").disabled=false;}
 };
-
-$("encounterForm").onsubmit = async (event) => {
-  event.preventDefault();
-  if (!selectedPatient) return;
-  try {
-    await api(`/patients/${selectedPatient.id}/encounters`, {
-      method: "POST",
-      body: JSON.stringify({
-        display_label: $("encounterLabel").value.trim(),
-        occurred_at: new Date($("occurredAt").value).toISOString(),
-      }),
-    });
-    event.target.reset();
-    $("encounterCard").classList.add("hidden");
-    message("就诊已保存，系统已自动生成就诊编号");
-    await loadPatients();
-  } catch (error) {
-    message(error.message, true);
-  }
-};
-
-$("showNewPatient").onclick = () => $("newPatientCard").classList.remove("hidden");
-$("createIntakeLink").onclick = createIntakeLink;
-$("loadIntakes").onclick = loadIntakes;
-$("closeIntakeLink").onclick = () => $("intakeLinkCard").classList.add("hidden");
-$("revokeIntakeLink").onclick = async () => {
-  if (!currentIntakeLinkId) return;
-  try {
-    await api(`/intake-links/${currentIntakeLinkId}/revoke`, { method: "POST" });
-    $("intakeLinkCard").classList.add("hidden");
-    message("通用建档二维码已撤销");
-  } catch (error) {
-    message(error.message, true);
-  }
-};
-$("cancelNewPatient").onclick = () => $("newPatientCard").classList.add("hidden");
-$("cancelEncounter").onclick = () => $("encounterCard").classList.add("hidden");
-$("revokeInvite").onclick = async () => {
-  if (!currentInvitationId) return;
-  try {
-    await api(`/invitations/${currentInvitationId}/revoke`, { method: "POST" });
-    $("inviteCard").classList.add("hidden");
-    message("邀请已撤销");
-  } catch (error) {
-    message(error.message, true);
-  }
-};
-$("logout").onclick = () => {
-  sessionStorage.removeItem("doctorToken");
-  location.reload();
-};
-$("closeInvite").onclick = () => $("inviteCard").classList.add("hidden");
-
-if (token) Promise.all([loadPatients(), loadCurrentNotice()]);
+["newPatientCard","inviteCard"].forEach(id=>{$(id).onclose=()=>$(id).classList.add("hidden");});
+$("logout").onclick=()=>AppSession.logout("doctor");window.addEventListener("hashchange",activateDoctorView);
+window.addEventListener("pageshow",event=>{if(event.persisted&&token)loadPatients().catch(error=>message(error.message,true));});
+async function init(){if(!token)return;try{const me=await api("/auth/me");if(me.role!=="doctor"){AppSession.logout("doctor");return;}doctorId=me.id;DoctorShell.setUser(me.display_name);activateDoctorView();await Promise.all([loadPatients(),loadCurrentNotice()]);}catch(error){message(error.message,true);}}
+init();

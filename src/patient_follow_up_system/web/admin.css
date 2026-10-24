@@ -1,0 +1,26 @@
+.admin-account-form { max-width:720px; margin:32px 0 12px; }
+.admin-account-form select { width:100%; }
+.admin-password-field { position:relative; min-width:0; }
+.admin-password-field input { padding-right:48px; }
+.doctor-app .password-toggle { position:absolute; top:50%; right:5px; transform:translateY(-50%); display:grid; place-items:center; width:36px; min-height:32px; padding:6px; background:transparent; color:#718897; }
+.password-toggle svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; }
+.password-toggle .eye-slash { display:none; }
+.password-toggle[aria-pressed="true"] .eye-slash { display:block; }
+.password-toggle:focus-visible { outline:2px solid #27786e; outline-offset:1px; }
+.account-filters { display:flex; align-items:center; gap:12px; margin:26px 0 20px; }
+.account-filters input { min-width:220px; width:280px; background:#f8fafc; }
+.account-filters select { min-width:110px; width:120px; }
+.account-filters > span { margin-left:auto; white-space:nowrap; }
+.account-table-wrap { overflow-x:auto; }
+.account-table { width:100%; border-collapse:collapse; text-align:left; font-size:13px; }
+.account-table th { background:#f5f8fa; color:#8295a2; font-weight:400; padding:12px 15px; font-size:11px; }
+.account-table td { border-bottom:1px solid #edf1f5; padding:18px 15px; color:#586e7d; }
+.account-table td:first-child { color:#264354; font-weight:500; }
+.account-login-time { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.account-table td:last-child,.account-table th:last-child { text-align:right; }
+.account-table tr:last-child td { border-bottom:0; }
+.account-table .account-state { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:20px; background:#edf7f1; color:#4f8b6c; font-size:11px; }
+.account-state::before { content:""; width:5px; height:5px; border-radius:50%; background:currentColor; }
+.account-table .account-state.inactive { background:#f1f3f5; color:#96a1a9; }
+.doctor-app .buttonLink:not(.secondary) { background:#27786e; }
+@media(max-width:1150px) { .account-filters { flex-wrap:wrap; }.account-filters > span { margin-left:0; } }

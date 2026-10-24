@@ -1,0 +1,14 @@
+[Unit]
+Description=Back up patient follow-up database and uploads
+
+[Service]
+Type=oneshot
+User=patientfollowup
+Group=patientfollowup
+UMask=0077
+ExecStart=/srv/apps/patientfollowup/current/.venv/bin/python /srv/apps/patientfollowup/current/deploy/linux/backup.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/patientfollowup
