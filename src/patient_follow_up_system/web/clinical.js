@@ -73,6 +73,8 @@ function render() {
   patients.forEach(p=>target.add(new Option(`${p.display_name} · ${p.patient_code}`,String(p.id))));
   if(doc.patient_id) target.value=String(doc.patient_id);
   target.disabled=doc.status!=="buffered";
+  $("visitDate").value = doc.visit_date || doc.suggested_visit_date || "";
+  $("visitDate").disabled = doc.status !== "buffered";
   renderButtonState();
   $("historyText").classList.add("hidden");
 }
@@ -89,6 +91,8 @@ async function review(action) {
   const target=$("targetPatient").value;
   const alreadyFiled=current.status==="filed";
   const payload={version:current.version,action:alreadyFiled&&action==="file"?"save":action,fields,create_patient:action==="file"&&!alreadyFiled&&target==="new",patient_id:action==="file"&&!alreadyFiled&&target&&target!=="new"?Number(target):null};
+  if(!alreadyFiled) payload.visit_date = $("visitDate").value || null;
+  if(action==="file"&&!alreadyFiled&&!payload.visit_date) throw new Error("请核对并填写就诊日期；无法识别时请对照原件补填。");
   if(action==="file"&&!target) throw new Error("请先选择确认入档患者或明确新建档案。");
   current=await api(`/clinical-documents/${current.id}/review`,{method:"POST",body:JSON.stringify(payload)});
   patients=await api("/patients"); render(); await list();

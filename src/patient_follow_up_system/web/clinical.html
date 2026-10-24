@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>病例识别与审核</title><link rel="stylesheet" href="/static/app.css?v=20261020"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261022-intake-2"><link rel="stylesheet" href="/static/clinical.css?v=20261022-review-1"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>病例识别与审核</title><link rel="stylesheet" href="/static/app.css?v=20261020"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261022-intake-2"><link rel="stylesheet" href="/static/clinical.css?v=20261024-visits-1"></head>
 <body class="doctor-app signed-in">
 <aside id="doctorSidebar" class="doctor-sidebar"></aside>
 <main class="doctor-main clinical-main">
@@ -18,10 +18,10 @@
       <div class="evidence-panel"><div><label for="previewPage">原件页码</label><select id="previewPage"></select></div><p id="evidenceText" class="muted">点击字段的“定位原文”查看对应证据。</p><div id="previewStage"><div id="previewWrap"><img id="preview" alt="病例阅读预览"><div id="highlight" class="hidden"></div></div></div></div>
       <div id="fields" tabindex="0" aria-label="病例字段核对列表"></div>
     </div>
-    <div class="review-actions"><label for="targetPatient">确认入档患者</label><select id="targetPatient"><option value="">请人工选择，不按识别姓名自动匹配</option></select>
-      <p class="muted">请核对姓名和至少一项病历内容；已有资料须归入原患者。</p>
+    <div class="review-actions"><div class="review-target"><label for="targetPatient">确认入档患者</label><select id="targetPatient"><option value="">请人工选择，不按识别姓名自动匹配</option></select></div><div class="review-date"><label for="visitDate">就诊日期（核对后确认）</label><input id="visitDate" type="date"><small>同一天归为同一次就诊</small></div>
+      <p class="muted">请核对姓名、就诊日期和至少一项病历内容；已有资料须归入原患者。</p>
       <div class="row"><button id="save" class="secondary">暂存</button><button id="fileRecord">确认并入档</button><button id="reject" class="danger">驳回</button></div>
     </div>
     <pre id="historyText" class="hidden"></pre>
   </section>
-</main><script src="/static/session.js?v=20261020"></script><script src="/static/doctor-shell.js?v=20261020-3"></script><script src="/static/clinical.js?v=20261022-review-1"></script></body></html>
+</main><script src="/static/session.js?v=20261020"></script><script src="/static/doctor-shell.js?v=20261020-3"></script><script src="/static/clinical.js?v=20261024-visits-1"></script></body></html>

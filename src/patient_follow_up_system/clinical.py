@@ -4,7 +4,7 @@ import hashlib
 import io
 import os
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -20,6 +20,7 @@ from patient_follow_up_system import clinical_ocr
 from patient_follow_up_system.auth import require_roles
 from patient_follow_up_system.database import get_db
 from patient_follow_up_system.web_pages import page_response
+from patient_follow_up_system.visit_dates import suggest_visit_date
 from patient_follow_up_system.models import (
     ClinicalDocument,
     ClinicalField,
@@ -66,6 +67,7 @@ class Review(BaseModel):
     fields: list[FieldReview] = Field(default_factory=list, max_length=50)
     patient_id: int | None = Field(default=None, ge=1)
     create_patient: bool = False
+    visit_date: date | None = None
 
 
 class ExtractionRequest(BaseModel):
@@ -141,6 +143,8 @@ def document_info(db: Session, doc: ClinicalDocument, detail: bool = True) -> di
     data = {
         "id": doc.id,
         "patient_id": doc.patient_id,
+        "visit_date": doc.visit_date,
+        "suggested_visit_date": suggest_visit_date(fields),
         "status": doc.status,
         "version": doc.version,
         "candidate_name": name,
@@ -344,7 +348,7 @@ def extract(document_id: int, request: ExtractionRequest, db: DB, doctor: Doctor
     doc = own_document(db, document_id, doctor)
     if doc.status != "buffered" or doc.version != request.version:
         raise HTTPException(409, "只能提取当前版本的缓冲区资料，请刷新。")
-    if any(f.review_status != "pending" or f.confirmed_value is not None for f in fields_for(db, doc.id)):
+    if doc.visit_date is not None or any(f.review_status != "pending" or f.confirmed_value is not None for f in fields_for(db, doc.id)):
         raise HTTPException(409, "已有人工审核结果，不能重新提取覆盖。")
     path, mime_type, version, actor_id = (
         original_path(doc),
@@ -408,7 +412,8 @@ def source_target(db: Session, doc: ClinicalDocument) -> int | None:
         source = db.get(PatientIntakeSubmission, doc.source_id)
         if source.status == "rejected":
             raise HTTPException(409, "建档申请已驳回，不能入档。")
-        return source.created_patient_id
+        link = db.get(PatientIntakeLink, source.intake_link_id)
+        return source.created_patient_id or link.patient_id
     return None
 
 
@@ -424,6 +429,12 @@ def review(document_id: int, request: Review, db: DB, doctor: Doctor):
     if len(set(keys)) != len(keys) or any(k not in fields for k in keys):
         raise HTTPException(422, "字段重复或不存在。")
     changes = {}
+    if "visit_date" in request.model_fields_set:
+        if doc.status == "filed" and request.visit_date != doc.visit_date:
+            raise HTTPException(409, "已归档的就诊日期不能覆盖，请另建更正资料。")
+        if request.visit_date != doc.visit_date:
+            changes["visit_date"] = {"before": str(doc.visit_date) if doc.visit_date else None, "after": str(request.visit_date) if request.visit_date else None}
+            doc.visit_date = request.visit_date
     now = datetime.now(UTC).replace(tzinfo=None)
     for change in request.fields:
         field = fields[change.key]
@@ -457,6 +468,8 @@ def review(document_id: int, request: Review, db: DB, doctor: Doctor):
         doc.status = "rejected"
         doc.patient_id = None
     elif request.action == "file":
+        if doc.visit_date is None:
+            raise HTTPException(422, "请核对并填写就诊日期，再确认归档。同一天的资料归为同一次就诊。")
         name = fields["patient_name"]
         if (
             name.review_status == "pending"
@@ -517,10 +530,10 @@ def review(document_id: int, request: Review, db: DB, doctor: Doctor):
         if doc.source_kind == "patient":
             source = db.get(PatientDocument, doc.source_id)
             source.review_status = "approved"
-            source.confirmed_event_date = source.event_date
+            source.confirmed_event_date = doc.visit_date
             source.confirmed_label = source.display_label
             source.doctor_summary = (
-                "逐字段审核内容见结构化病历档案；时间沿用患者填写的资料日期。"
+                "逐字段审核内容见结构化病历档案；就诊日期已经医生确认。"
             )
             source.reviewed_by_doctor_id, source.reviewed_at = doctor.id, now
         changes["patient_id"] = patient.id

@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from patient_follow_up_system.accounts import router as accounts_router
+from patient_follow_up_system.patient_workspace import router as patient_workspace_router
 from patient_follow_up_system.clinical import router as clinical_router
 from patient_follow_up_system.auth import (
     authenticate_user,
@@ -65,6 +66,7 @@ web_root = Path(__file__).resolve().parent / "web"
 app.mount("/static", StaticFiles(directory=web_root), name="static")
 
 app.include_router(accounts_router)
+app.include_router(patient_workspace_router)
 app.include_router(clinical_router)
 
 

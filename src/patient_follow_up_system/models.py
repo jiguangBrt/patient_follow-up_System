@@ -375,6 +375,7 @@ class ClinicalDocument(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_doctor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True, nullable=False)
     patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), index=True)
+    visit_date: Mapped[date | None] = mapped_column(nullable=True)
     source_kind: Mapped[str] = mapped_column(String(20), nullable=False, default="buffer")
     source_id: Mapped[int | None] = mapped_column(Integer)
     original_name: Mapped[str] = mapped_column(String(255), nullable=False)

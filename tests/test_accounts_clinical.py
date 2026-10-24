@@ -191,6 +191,8 @@ def field(key, value, status="corrected"):
 
 
 def review(client, headers, doc, fields, action="save", **kwargs):
+    if action == "file":
+        kwargs.setdefault("visit_date", "2026-10-22")
     return client.post(
         f"/clinical-documents/{doc['id']}/review",
         headers=headers,
@@ -837,3 +839,179 @@ def test_intake_import_stays_unbound_until_corrected_name_is_filed(env, tmp_path
             and submission.created_patient_id == patient_id
         )
         assert db.scalar(select(PatientDemoConsent)).patient_id == patient_id
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("2026-10-22 16:08:13", "2026-10-22"),
+        ("2026-10-0109:18:26", "2026-10-01"),
+        ("2026-10-011234", None),
+        ("2026年8月11日", "2026-08-11"),
+        ("2026/8/11", "2026-08-11"),
+        ("2026.08.11", "2026-08-11"),
+        ("2026-02-30", None),
+        ("2026-08-11\n2026-08-12", None),
+        ("未说明", None),
+    ],
+)
+def test_visit_date_suggestions_are_conservative(raw, expected):
+    from patient_follow_up_system.visit_dates import parse_visit_date
+
+    value = parse_visit_date(raw)
+    assert (value.isoformat() if value else None) == expected
+
+
+def test_workspace_groups_only_confirmed_records_by_doctor_visit_date(env):
+    client, factory, ids = env
+    headers = auth(client)
+    records = []
+    for day in ("2026-08-11", "2026-08-11", "2026-08-12"):
+        doc = upload(client, headers)
+        with factory() as db:
+            value = db.scalar(
+                select(ClinicalField).where(
+                    ClinicalField.document_id == doc["id"],
+                    ClinicalField.key == "visit_time",
+                )
+            )
+            value.candidate_value = day + " 16:08:13"
+            value.candidate_status = "recognized"
+            db.commit()
+        suggestion = client.get(
+            f"/clinical-documents/{doc['id']}", headers=headers
+        ).json()
+        assert suggestion["suggested_visit_date"] == day
+        result = review(
+            client,
+            headers,
+            doc,
+            [field("patient_name", "虚构甲"), field("chief_complaint", "腹胀")],
+            "file",
+            patient_id=ids["patient_record"],
+            visit_date=day,
+        )
+        assert result.status_code == 200, result.text
+        records.append(result.json())
+    upload(client, headers)  # Unassigned buffer must not leak into a patient's archive.
+    response = client.get(
+        f"/patients/{ids['patient_record']}/workspace", headers=headers
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert [v["date"] for v in data["visits"]] == ["2026-08-12", "2026-08-11"]
+    assert [len(v["records"]) for v in data["visits"]] == [1, 2]
+    assert not data["unfiled"]
+    assert all(
+        "candidate_value" not in f
+        for v in data["visits"]
+        for d in v["records"]
+        for f in d["fields"]
+    )
+    assert (
+        client.get(
+            f"/patients/{ids['patient_record']}/workspace",
+            headers=auth(client, "other_doctor"),
+        ).status_code
+        == 404
+    )
+    assert (
+        client.get(
+            f"/patients/{ids['patient_record']}/workspace",
+            headers=auth(client, "patient"),
+        ).status_code
+        == 403
+    )
+    locked = review(client, headers, records[0], [], "save", visit_date="2026-08-13")
+    assert locked.status_code == 409
+
+
+def test_filing_requires_explicit_valid_date_and_draft_date_survives_refresh(env):
+    client, _, ids = env
+    headers = auth(client)
+    doc = upload(client, headers)
+    fields = [field("patient_name", "虚构甲"), field("chief_complaint", "腹胀")]
+    for day in (None, "2026-02-30"):
+        result = review(
+            client,
+            headers,
+            doc,
+            fields,
+            "file",
+            patient_id=ids["patient_record"],
+            visit_date=day,
+        )
+        assert result.status_code == 422
+    saved = review(client, headers, doc, [], "save", visit_date="2026-08-11").json()
+    assert (
+        client.get(f"/clinical-documents/{doc['id']}", headers=headers).json()[
+            "visit_date"
+        ]
+        == "2026-08-11"
+    )
+    result = review(
+        client,
+        headers,
+        saved,
+        fields,
+        "file",
+        patient_id=ids["patient_record"],
+        visit_date="2026-08-11",
+    )
+    assert result.status_code == 200
+
+
+def test_pending_patient_source_is_unfiled_and_moves_once_on_confirmation(
+    env, tmp_path
+):
+    client, factory, ids = env
+    headers = auth(client)
+    data = png_bytes()
+    root = tmp_path / "intake"
+    root.mkdir()
+    (root / "pending.png").write_bytes(data)
+    with factory() as db:
+        link = PatientIntakeLink(
+            token_digest="4" * 64,
+            created_by_doctor_id=ids["doctor"],
+            patient_id=ids["patient_record"],
+            expires_at=datetime(2030, 1, 1),
+        )
+        db.add(link)
+        db.flush()
+        submission = PatientIntakeSubmission(
+            intake_link_id=link.id,
+            submission_digest="5" * 64,
+            display_name="虚构甲",
+            sex="女",
+            date_of_birth=datetime(1970, 1, 1).date(),
+            operator_relationship="本人",
+            document_name="pending.png",
+            document_mime_type="image/png",
+            document_storage_name="pending.png",
+            document_sha256=hashlib.sha256(data).hexdigest(),
+        )
+        db.add(submission)
+        db.commit()
+        source_id = submission.id
+    doc = client.post(
+        "/clinical-documents/import",
+        headers=headers,
+        json={"source_kind": "intake", "source_id": source_id},
+    ).json()
+    path = f"/patients/{ids['patient_record']}/workspace"
+    pending = client.get(path, headers=headers).json()
+    assert not pending["visits"] and len(pending["unfiled"]) == 1
+    assert pending["unfiled"][0]["kind"] == "clinical"
+    fields = [field("patient_name", "虚构甲"), field("chief_complaint", "腹胀")]
+    assert (
+        review(client, headers, doc, fields, "file", create_patient=True).status_code
+        == 409
+    )
+    result = review(
+        client, headers, doc, fields, "file", patient_id=ids["patient_record"]
+    )
+    assert result.status_code == 200, result.text
+    filed = client.get(path, headers=headers).json()
+    assert len(filed["visits"]) == 1 and len(filed["visits"][0]["records"]) == 1
+    assert not filed["unfiled"]

@@ -529,8 +529,9 @@ def test_pages_and_api_paths_do_not_put_tokens_in_paths(invitation_app) -> None:
     doctor_page = client.get("/doctor")
     assert doctor_page.status_code == 200
     assert "新增患者" in doctor_page.text
-    assert "系统自动生成患者编号和就诊编号" in doctor_page.text
-    assert "新增模拟就诊" in doctor_page.text
+    assert 'id="patientDetailScroll"' in doctor_page.text
+    assert 'id="showPatientQr"' in doctor_page.text
+    assert 'id="patients"' in doctor_page.text
     assert client.get("/static/doctor-shell.js").status_code == 200
     assert client.get("/invite").status_code == 200
     patient_page = client.get("/patient")
