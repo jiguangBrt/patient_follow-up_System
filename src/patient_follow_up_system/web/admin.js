@@ -31,7 +31,27 @@
     $("pageTitle").textContent=title;$("breadcrumb").textContent=`${group} / ${title}`;DoctorShell.activate(key);
     $("message").classList.add("hidden");if(description){$("placeholderTitle").textContent=title;$("placeholderDescription").textContent=description;}
   }
-  $("accountForm").onsubmit=async event=>{event.preventDefault();const button=event.target.querySelector("button");button.disabled=true;try{
+  const passwordControls = [["newPassword", "toggleNewPassword", "初始密码"], ["confirmPassword", "toggleConfirmPassword", "确认密码"]];
+  function setPasswordVisible(inputId, buttonId, label, visible) {
+    $(inputId).type = visible ? "text" : "password";
+    $(buttonId).setAttribute("aria-label", `${visible ? "隐藏" : "显示"}${label}`);
+    $(buttonId).setAttribute("aria-pressed", String(visible));
+  }
+  passwordControls.forEach(([inputId, buttonId, label]) => {
+    $(buttonId).onclick = () => setPasswordVisible(inputId, buttonId, label, $(inputId).type === "password");
+    $(inputId).addEventListener("input", () => $("confirmPassword").setCustomValidity(""));
+  });
+  $("accountForm").onreset = () => {
+    passwordControls.forEach(([inputId, buttonId, label]) => setPasswordVisible(inputId, buttonId, label, false));
+    $("confirmPassword").setCustomValidity("");
+  };
+  $("accountForm").onsubmit=async event=>{event.preventDefault();
+    if ($("newPassword").value !== $("confirmPassword").value) {
+      $("confirmPassword").setCustomValidity("两次输入的密码不一致，请重新输入。");
+      $("confirmPassword").reportValidity();
+      return;
+    }
+    const button=event.target.querySelector('button[type="submit"]');button.disabled=true;try{
     await api("/admin/accounts",{method:"POST",body:JSON.stringify({username:$("newUsername").value,display_name:$("displayName").value,password:$("newPassword").value,role:$("role").value})});
     event.target.reset();await load();history.replaceState(null,"","/admin#accounts");activateView();message("账号已开通");
   }catch(error){message(error.message,true);}finally{button.disabled=false;}};

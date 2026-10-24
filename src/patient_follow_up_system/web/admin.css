@@ -1,5 +1,12 @@
 .admin-account-form { max-width:720px; margin:32px 0 12px; }
 .admin-account-form select { width:100%; }
+.admin-password-field { position:relative; min-width:0; }
+.admin-password-field input { padding-right:48px; }
+.doctor-app .password-toggle { position:absolute; top:50%; right:5px; transform:translateY(-50%); display:grid; place-items:center; width:36px; min-height:32px; padding:6px; background:transparent; color:#718897; }
+.password-toggle svg { width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; }
+.password-toggle .eye-slash { display:none; }
+.password-toggle[aria-pressed="true"] .eye-slash { display:block; }
+.password-toggle:focus-visible { outline:2px solid #27786e; outline-offset:1px; }
 .account-filters { display:flex; align-items:center; gap:12px; margin:26px 0 20px; }
 .account-filters input { min-width:220px; width:280px; background:#f8fafc; }
 .account-filters select { min-width:110px; width:120px; }

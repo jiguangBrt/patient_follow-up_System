@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>平台管理 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261020-2"><link rel="stylesheet" href="/static/admin.css?v=20261020"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>平台管理 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261020-2"><link rel="stylesheet" href="/static/admin.css?v=20261024-password-1"></head>
 <body class="doctor-app signed-in admin-workspace" data-workspace-role="admin">
 <aside id="doctorSidebar" class="doctor-sidebar"></aside>
 <main class="doctor-main">
@@ -15,13 +15,14 @@
     <form id="accountForm" class="form-grid admin-account-form">
       <label for="newUsername">登录账号</label><input id="newUsername" pattern="[A-Za-z0-9_][A-Za-z0-9_.-]{2,49}" required placeholder="3–50 位字母、数字或 _ . -" autocomplete="off">
       <label for="displayName">显示名称</label><input id="displayName" maxlength="100" required placeholder="请输入显示名称">
-      <label for="newPassword">初始密码</label><input id="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required placeholder="至少 8 位">
+      <label for="newPassword">初始密码</label><div class="admin-password-field"><input id="newPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required placeholder="至少 8 位"><button id="toggleNewPassword" class="password-toggle" type="button" aria-label="显示初始密码" aria-controls="newPassword" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg></button></div>
+      <label for="confirmPassword">确认初始密码</label><div class="admin-password-field"><input id="confirmPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required placeholder="请再次输入初始密码"><button id="toggleConfirmPassword" class="password-toggle" type="button" aria-label="显示确认密码" aria-controls="confirmPassword" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="eye-slash" d="m3 3 18 18"/></svg></button></div>
       <label for="role">账号类型</label><select id="role"><option value="doctor">医生</option><option value="patient">患者</option></select>
       <p class="muted full-row">患者账号开通后，通过医生提供的专属邀请认领档案。</p>
-      <div class="row full-row"><button>开通账号</button><a class="buttonLink secondary" href="#accounts">返回账号列表</a></div>
+      <div class="row full-row"><button type="submit">开通账号</button><a class="buttonLink secondary" href="#accounts">返回账号列表</a></div>
     </form>
   </section>
   <section class="card hidden" id="placeholderCard"><div class="placeholder-content"><div><span class="placeholder-icon" aria-hidden="true">◷</span><h2 id="placeholderTitle"></h2><p id="placeholderDescription"></p><p>待建设</p></div></div></section>
   <p id="message" class="hidden" role="status" aria-live="polite"></p>
-</main><script src="/static/session.js?v=20261020"></script><script src="/static/doctor-shell.js?v=20261020-3"></script><script src="/static/admin.js?v=20261020-3"></script>
+</main><script src="/static/session.js?v=20261020"></script><script src="/static/doctor-shell.js?v=20261020-3"></script><script src="/static/admin.js?v=20261024-password-1"></script>
 </body></html>
