@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>患者建档</title><link rel="stylesheet" href="/static/app.css?v=20261022-intake-2"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>患者建档</title><link rel="stylesheet" href="/static/app.css?v=20261022-intake-2"><link rel="stylesheet" href="/static/theme.css?v=20261027-theme-2"><script src="/static/accessibility.js?v=20261027-theme-2"></script></head>
 <body class="patient-page">
-  <header class="patient-header"><h1>患者建档</h1><p>专属二维码 · 姓名由医生设定</p></header>
+  <header class="patient-header"><h1>患者建档</h1></header>
   <main class="mobile"><section class="card patient-card">
     <p class="step-label" id="stepLabel">第 1 步，共 2 步</p><h2 id="pageTitle">阅读患者须知</h2>
     <div id="status" class="status" role="status">正在检查二维码…</div>
@@ -10,7 +10,7 @@
       <h3 id="noticeTitle">患者须知</h3>
       <p id="noticeVersion" class="version-pill"></p>
       <div id="noticeContent" class="notice-content"></div>
-      <p class="muted">向下阅读即可；系统不会把滚动动作判断为“已认真阅读”。</p>
+
       <label class="check-row"><input id="consent" type="checkbox">我同意按以上版本生成一条试用记录</label>
       <button id="continueButton" type="button" disabled>同意并继续填写</button>
     </section>
@@ -23,7 +23,6 @@
       <label id="documentLabel" for="document">纸质病历或报告（选填）</label><input id="document" type="file" accept="image/jpeg,image/png,application/pdf">
       <img id="preview" class="document-preview hidden" alt="待提交资料预览">
       <p id="fileHelp" class="muted">支持 JPG、PNG 或 PDF，最大 8 MB。请只使用虚构或去标识化资料。</p>
-      <p class="muted">试用阶段请勿填写真实姓名、手机号、证件号、病案号或真实临床信息。</p>
       <button id="submitButton" type="submit">提交给医生审核</button>
     </form>
     <div id="done" class="completion hidden"><div class="completion-mark">✓</div><h3 id="completionTitle">信息已提交</h3><p id="consentReceipt"></p><p id="completionDescription">等待医生审核，请勿重复提交。审核通过后可以再次扫码补交病历。</p><button id="submitMore" class="hidden" type="button">补交病历</button></div>

@@ -16,8 +16,12 @@ def test_pages_keep_assets_inside_mount(prefix, page):
         assert response.status_code == 200
         assert f'src="{prefix}/static/paths.js?' in response.text
         assert f'href="{prefix}/static/' in response.text
+        assert f'href="{prefix}/static/theme.css?' in response.text
+        assert f'src="{prefix}/static/accessibility.js?' in response.text
         assert response.headers["cache-control"] == "no-store"
         assert client.get(prefix + "/static/paths.js").status_code == 200
+        assert client.get(prefix + "/static/theme.css").status_code == 200
+        assert client.get(prefix + "/static/accessibility.js").status_code == 200
         assert client.get(prefix + "/health").json() == {"status": "ok"}
         if prefix:
             assert 'href="/static/' not in response.text

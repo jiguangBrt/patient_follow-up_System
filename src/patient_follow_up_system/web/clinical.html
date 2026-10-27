@@ -1,25 +1,24 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>病例识别与审核</title><link rel="stylesheet" href="/static/app.css?v=20261020"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261022-intake-2"><link rel="stylesheet" href="/static/clinical.css?v=20261024-visits-1"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>病例识别与审核</title><link rel="stylesheet" href="/static/app.css?v=20261020"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261022-intake-2"><link rel="stylesheet" href="/static/clinical.css?v=20261024-visits-1"><link rel="stylesheet" href="/static/theme.css?v=20261027-theme-2"><script src="/static/accessibility.js?v=20261027-theme-2"></script></head>
 <body class="doctor-app signed-in">
 <aside id="doctorSidebar" class="doctor-sidebar"></aside>
 <main class="doctor-main clinical-main">
-  <div class="workspace-topbar"><div><p class="breadcrumb">诊疗管理 / 病例识别与审核</p><h1>病例识别与审核</h1></div><span class="trial-tag">原件留存 · 医生确认后入档</span></div>
+  <div class="workspace-topbar"><div><p class="breadcrumb">诊疗管理 / 病例识别与审核</p><h1>病例识别与审核</h1></div><span class="trial-tag">试用环境 · 仅虚构或去标识化资料</span></div>
   <p id="message" class="status" role="status" aria-live="polite">正在加载…</p>
-  <section id="uploadCard" class="card"><h2>上传病例原件</h2><p>上传后先存入缓冲区。识别姓名仅作候选；确认入档前不绑定患者或患者账号。支持 JPG、PNG、PDF（8 MB 以内，PDF 最多 10 页）。</p>
+  <section id="uploadCard" class="card"><h2>上传病例原件</h2><p>支持 JPG、PNG、PDF，每份不超过 8 MB，PDF 不超过 10 页。</p>
     <form id="uploadForm" class="row"><select id="uploadPatient" class="hidden" aria-label="选择已获录入授权的患者"></select><input id="file" type="file" accept="image/jpeg,image/png,application/pdf" aria-label="病例原件" required><button id="uploadButton">上传到缓冲区</button></form><p id="studentUploadHelp" class="muted hidden">学生上传前须选择已获录入授权的患者；上传与暂存不会自动确认入档。</p>
   </section>
   <section id="bufferCard" class="card"><div class="toolbar"><h2>病例缓冲区与审核记录</h2><button id="refresh" class="secondary">刷新缓冲区</button></div><div id="documents"></div></section>
   <section id="reviewCard" class="card hidden">
     <div class="review-header"><div class="toolbar"><h2 id="reviewTitle">病例核对</h2><button id="backToBuffer" class="secondary">返回缓冲区</button></div><p id="documentMeta" class="muted"></p><p id="extractionState" class="muted"></p>
     <div class="row"><button id="extract">运行本机 OCR</button><button id="openOriginal" class="secondary">打开原件</button><button id="history" class="secondary">查看审核记录</button></div>
-    <p class="review-help muted">请对照原件核对并修改右侧内容，未知项留空。“暂存”仅保存草稿；“确认并入档”统一确认所有非空内容，明确记载“无”时才填写“无”。</p></div>
+    </div>
     <div class="clinical-grid">
-      <div class="evidence-panel"><div><label for="previewPage">原件页码</label><select id="previewPage"></select></div><p id="evidenceText" class="muted">点击字段的“定位原文”查看对应证据。</p><div id="previewStage"><div id="previewWrap"><img id="preview" alt="病例阅读预览"><div id="highlight" class="hidden"></div></div></div></div>
+      <div class="evidence-panel"><div><label for="previewPage">原件页码</label><select id="previewPage"></select></div><p id="evidenceText" class="muted">点“定位原文”核对证据。</p><div id="previewStage"><div id="previewWrap"><img id="preview" alt="病例阅读预览"><div id="highlight" class="hidden"></div></div></div></div>
       <div id="fields" tabindex="0" aria-label="病例字段核对列表"></div>
     </div>
-    <div class="review-actions"><div class="review-target"><label for="targetPatient">确认入档患者</label><select id="targetPatient"><option value="">请人工选择，不按识别姓名自动匹配</option></select></div><div class="review-date"><label for="visitDate">就诊日期（核对后确认）</label><input id="visitDate" type="date"><small>同一天归为同一次就诊</small></div>
-      <p class="muted">请核对姓名、就诊日期和至少一项病历内容；已有资料须归入原患者。</p>
+    <div class="review-actions"><div class="review-target"><label for="targetPatient">确认入档患者</label><select id="targetPatient"><option value="">请人工选择，不按识别姓名自动匹配</option></select></div><div class="review-date"><label for="visitDate">就诊日期</label><input id="visitDate" type="date"></div>
       <div class="row"><button id="save" class="secondary">暂存</button><button id="fileRecord">确认并入档</button><button id="reject" class="danger">驳回</button></div>
     </div>
     <pre id="historyText" class="hidden"></pre>

@@ -5,25 +5,15 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>登录 · 随访工作台</title>
   <link rel="stylesheet" href="/static/login.css?v=20261020">
+  <link rel="stylesheet" href="/static/theme.css?v=20261027-theme-2">
+  <script src="/static/accessibility.js?v=20261027-theme-2"></script>
 </head>
 <body>
   <div class="login-page">
-    <header class="brand-bar"><a class="brand" href="/" aria-label="随访工作台首页"><span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span>随访工作台<small>PATIENT FOLLOW-UP</small></span></a><span class="brand-caption">连接医患 · 有序随访</span></header>
+    <header class="brand-bar"><a class="brand" href="/" aria-label="随访工作台首页"><span class="brand-mark"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span>随访工作台</span></a></header>
     <main class="login-layout">
-      <section class="introduction" aria-label="平台介绍">
-        <span class="eyebrow"><i></i> 记录每一次就诊</span>
-        <h1>让每一份病历，<br><em>清晰可查。</em></h1>
-        <p class="intro-copy">妥善保存就诊资料，让患者安心提交，<br>让医生从容核对。</p>
-        <div class="record-illustration" aria-hidden="true">
-          <div class="illustration-orbit"></div>
-          <div class="illustration-file"><div class="file-head"><span class="file-icon">＋</span><div><strong>就诊资料</strong><span class="sketch-line short"></span></div><span class="file-dot"></span></div><div class="sketch-line"></div><div class="sketch-line medium"></div><div class="file-separator"></div><div class="file-bottom"><span>原件妥善留存</span><span class="file-check">✓</span></div></div>
-          <div class="review-chip"><span>✓</span><div>医生审核<small>逐项核对，确认入档</small></div></div>
-          <span class="illustration-spark spark-one"></span><span class="illustration-spark spark-two"></span>
-        </div>
-        <div class="intro-labels"><span><i>✓</i> 原件留存</span><span><i>✓</i> 医生确认</span><span><i>✓</i> 本人档案</span></div>
-      </section>
       <section class="login-card" aria-labelledby="loginTitle">
-        <p class="welcome-label">欢迎回来</p><h2 id="loginTitle">登录随访工作台</h2><p id="roleDescription" class="form-description"></p>
+        <h2 id="loginTitle">登录随访工作台</h2><p id="roleDescription" class="form-description visually-hidden"></p>
         <div class="role-tabs" role="tablist" aria-label="选择登录身份">
           <button type="button" role="tab" id="tab-patient" data-role="patient" aria-controls="loginPanel" aria-selected="false" tabindex="-1">患者</button>
           <button type="button" role="tab" id="tab-team" data-role="team" aria-controls="loginPanel" aria-selected="true">医生团队</button>
@@ -37,7 +27,7 @@
             <button id="submitLogin" type="submit" class="submit-login">登录医生团队 <span aria-hidden="true">→</span></button>
           </form>
           <details id="patientHelp" class="patient-help" hidden><summary>还没有患者账号？</summary><p>请联系医生，使用医生提供的专属邀请完成首次登记和账号认领。</p></details>
-          <p class="login-hint">请选择与你的账号对应的身份登录。</p>
+
         </div>
       </section>
     </main>

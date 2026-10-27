@@ -1,17 +1,17 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>平台管理 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261020-2"><link rel="stylesheet" href="/static/admin.css?v=20261024-accounts-2"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>平台管理 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261020-2"><link rel="stylesheet" href="/static/admin.css?v=20261024-accounts-2"><link rel="stylesheet" href="/static/theme.css?v=20261027-theme-2"><script src="/static/accessibility.js?v=20261027-theme-2"></script></head>
 <body class="doctor-app signed-in admin-workspace" data-workspace-role="admin">
 <aside id="doctorSidebar" class="doctor-sidebar"></aside>
 <main class="doctor-main">
-  <div class="workspace-topbar"><div><p id="breadcrumb" class="breadcrumb">账号与访问 / 账号管理</p><h1 id="pageTitle">账号管理</h1></div><span class="trial-tag">管理员工作区 · 本地试用</span></div>
+  <div class="workspace-topbar"><div><p id="breadcrumb" class="breadcrumb">账号与访问 / 账号管理</p><h1 id="pageTitle">账号管理</h1></div><span class="trial-tag">试用环境 · 仅虚构或去标识化资料</span></div>
   <section class="card hidden" id="accountsCard">
-    <div class="toolbar"><div><h2>账号管理</h2><p class="muted">区分医生、学生和患者账号；学生必须归属一名医生</p></div><div class="row"><button id="refresh" class="secondary">刷新</button><a class="buttonLink" href="#new-account">＋ 开通账号</a></div></div>
+    <div class="toolbar"><div class="row"><button id="refresh" class="secondary">刷新</button><a class="buttonLink" href="#new-account">＋ 开通账号</a></div></div>
     <div class="account-filters"><input id="accountSearch" type="search" aria-label="搜索账号或名称" placeholder="搜索账号或名称"><select id="roleFilter" aria-label="筛选账号类型"><option value="">全部类型</option><option value="doctor">医生</option><option value="student">学生</option><option value="patient">患者</option></select><select id="statusFilter" aria-label="筛选账号状态"><option value="">全部状态</option><option value="active">启用</option><option value="inactive">停用</option></select><span id="accountCounts" class="muted"></span></div>
     <div class="account-table-wrap"><table class="account-table"><thead><tr><th scope="col">显示名称</th><th scope="col">登录账号</th><th scope="col">类型</th><th scope="col">所属医生</th><th scope="col">状态</th><th scope="col">上次登录（北京时间）</th><th scope="col">操作</th></tr></thead><tbody id="accounts"></tbody></table></div>
   </section>
   <section class="card hidden" id="createAccountCard">
-    <div class="toolbar"><div><h2>开通测试账号</h2><p class="muted">填写账号信息，选择对应的工作区身份</p></div></div>
+
     <form id="accountForm" class="form-grid admin-account-form">
       <label for="newUsername">登录账号</label><input id="newUsername" pattern="[A-Za-z0-9_][A-Za-z0-9_.-]{2,49}" required placeholder="3–50 位字母、数字或 _ . -" autocomplete="off">
       <label for="displayName">显示名称</label><input id="displayName" maxlength="100" required placeholder="请输入显示名称">
