@@ -56,6 +56,40 @@ Nginx 的访问日志在共享服务器上；Uvicorn 不记录含患者 ID 的�
 
 ## 后续更新与其他项目
 
+### 从 Git 同步 main 并部署
+
+服务器使用 `/srv/apps/patientfollowup/source` 作为 Git 源码仓库（分支为 `main`），每次部署建立独立的 Git worktree 版本目录，`current` 指向正在运行的版本。数据库、原件和配置继续使用上表中的独立位置。
+
+已安装更新命令后，在服务器运行：
+
+```bash
+patientfollowup-update --check   # 拉取 main，显示最新提交与正在运行的提交，不切换服务
+patientfollowup-update           # 准备并部署 main；已是同一提交时不会重复重启
+git -C /srv/apps/patientfollowup/source status --short --branch
+git -C /srv/apps/patientfollowup/current log -1 --oneline
+```
+
+这是手动更新入口，不会因 GitHub 有新提交就自动部署。请把功能分支合并进 `main` 后再运行。拉取有超时和重试，网络失败时保留正在运行的版本。源码仓库或正在运行的 worktree 有本地修改时，命令会停止；不会自动清除修改或强制覆盖分支。
+
+更新时先准备依赖，依赖锁文件未变化则引用已有虚拟环境，变化时按 `uv.lock` 创建独立环境。代码与数据库迁移版本不同时，停止应用并备份数据，再执行迁移。新版本健康检查失败时自动切回旧代码并尝试启动旧服务；数据库不会自动降级，涉及不兼容迁移时应根据备份人工恢复。旧版本的虚拟环境可能被新版本引用，不能直接删除旧 release。
+
+在另一台已经按本文安装好服务的服务器上，首次配置可执行：
+
+```bash
+git clone --branch main --single-branch --filter=blob:none <Git仓库地址> /srv/apps/patientfollowup/source
+python3 -m venv /opt/patientfollowup-tools
+/opt/patientfollowup-tools/bin/pip install uv==0.11.7 -i https://mirrors.aliyun.com/pypi/simple/
+install -m 0755 /srv/apps/patientfollowup/source/deploy/linux/update-from-git.sh /usr/local/sbin/patientfollowup-update
+patientfollowup-update --check
+patientfollowup-update
+```
+
+公开仓库使用 HTTPS 读取即可。私有仓库应另行配置只读部署凭据，不要复制本机私钥，也不要把访问令牌写进仓库 URL。首次接管旧的非 Git release 前，应核对它与 `main` 的运行代码差异，保留尚未提交的服务器修复。
+
+部署器脚本自身有变更时，待相应 PR 合并并更新后，再将 `current/deploy/linux/update-from-git.sh` 重新 `install -m 0755` 到 `/usr/local/sbin/patientfollowup-update`。
+
+部署器的回归测试在 Linux root 下运行：`python3 tests/test_git_deploy.py`。测试使用临时 Git 仓库和模拟服务/网络命令，覆盖只检查、精确版本切换、重复执行、网络失败、脏工作区保护、依赖准备失败，以及迁移或健康检查失败回退，不操作实际应用数据。
+
 - 更新代码使用新的 release 目录，数据和配置始终留在 release 之外。运行迁移前先备份，确认版本兼容再切换 `current`。
 - Python 代码可切回旧 release，但数据库迁移不会随软链接自动回滚；恢复数据库须按迁移兼容性单独处理。
 - 其他项目使用独立用户、数据目录和本机端口（例如 8102），再在 `/etc/nginx/project-locations/` 新建互不重叠的 location 文件。不要重复创建监听同一默认端口的站点，也不要抢占本项目端口或路径。
