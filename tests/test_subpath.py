@@ -7,7 +7,7 @@ from patient_follow_up_system.main import app
 
 
 @pytest.mark.parametrize("prefix", ["", "/patientfollowup"])
-@pytest.mark.parametrize("page", ["/", "/login", "/doctor", "/patient", "/invite", "/intake", "/admin", "/clinical"])
+@pytest.mark.parametrize("page", ["/", "/login", "/doctor", "/patient", "/invite", "/intake", "/admin", "/clinical", "/team"])
 def test_pages_keep_assets_inside_mount(prefix, page):
     host = FastAPI()
     host.mount(prefix or "/", app)

@@ -18,8 +18,6 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from patient_follow_up_system.accounts import router as accounts_router
-from patient_follow_up_system.patient_workspace import router as patient_workspace_router
-from patient_follow_up_system.clinical import router as clinical_router
 from patient_follow_up_system.auth import (
     authenticate_user,
     create_access_token,
@@ -28,8 +26,7 @@ from patient_follow_up_system.auth import (
     require_env,
     require_roles,
 )
-from patient_follow_up_system.link_urls import patient_link_token, public_base_url
-from patient_follow_up_system.web_pages import page_response
+from patient_follow_up_system.clinical import router as clinical_router
 from patient_follow_up_system.database import get_db
 from patient_follow_up_system.invitations import (
     MAX_FAILED_VERIFICATION_ATTEMPTS,
@@ -42,19 +39,30 @@ from patient_follow_up_system.invitations import (
     invitation_state,
     verify_verification_code,
 )
+from patient_follow_up_system.link_urls import patient_link_token, public_base_url
 from patient_follow_up_system.models import (
     Encounter,
     Patient,
+    PatientDemoConsent,
+    PatientDocument,
     PatientIntakeLink,
     PatientIntakeSubmission,
     PatientInvitation,
-    PatientDocument,
-    PatientDemoConsent,
     PatientNoticeVersion,
     User,
     UserRole,
 )
-
+from patient_follow_up_system.patient_workspace import (
+    router as patient_workspace_router,
+)
+from patient_follow_up_system.permissions import (
+    intake_scope,
+    patient_permissions,
+    patient_scope,
+    require_patient,
+)
+from patient_follow_up_system.team import router as team_router
+from patient_follow_up_system.web_pages import page_response
 
 load_dotenv()
 
@@ -66,6 +74,7 @@ web_root = Path(__file__).resolve().parent / "web"
 app.mount("/static", StaticFiles(directory=web_root), name="static")
 
 app.include_router(accounts_router)
+app.include_router(team_router)
 app.include_router(patient_workspace_router)
 app.include_router(clinical_router)
 
@@ -118,6 +127,7 @@ class PatientResponse(BaseModel):
     display_name: str
     is_bound: bool
     created_at: datetime
+    permissions: list[str] = Field(default_factory=list)
 
 
 class EncounterCreateRequest(BaseModel):
@@ -247,6 +257,7 @@ class IntakeSubmissionResponse(BaseModel):
     created_patient_id: int | None
     notice_version: str | None
     has_document: bool
+    permissions: list[str] = Field(default_factory=list)
     extraction_status: str
     consented_at: datetime | None = None
     consent_is_legacy_incomplete: bool = False
@@ -419,21 +430,9 @@ def accessible_patient_or_404(
     db: Session,
     patient_id: int,
     current_user: User,
+    operation: str = "view",
 ) -> Patient:
-    scope_condition = (
-        Patient.responsible_doctor_id == current_user.id
-        if current_user.role == UserRole.DOCTOR
-        else Patient.patient_user_id == current_user.id
-    )
-    patient = db.scalar(
-        select(Patient).where(Patient.id == patient_id, scope_condition)
-    )
-    if patient is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Patient was not found in the allowed data scope.",
-        )
-    return patient
+    return require_patient(db, patient_id, current_user, operation)
 
 
 def current_patient_notice(db: Session, now: datetime | None = None) -> PatientNoticeVersion | None:
@@ -562,7 +561,7 @@ def read_current_patient_notice(
 @app.get("/doctor/patient-notices/current", response_model=DoctorNoticeResponse)
 def read_doctor_current_patient_notice(
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT))],
 ) -> DoctorNoticeResponse:
     notice = current_patient_notice(db)
     if notice is None:
@@ -646,6 +645,7 @@ def login(
         role_name = {
             UserRole.PATIENT: "患者",
             UserRole.DOCTOR: "医生",
+            UserRole.STUDENT: "学生",
             UserRole.ADMIN: "管理员",
         }[user.role]
         raise HTTPException(
@@ -707,18 +707,19 @@ def list_patients(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[
         User,
-        Depends(require_roles(UserRole.DOCTOR, UserRole.PATIENT)),
+        Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT, UserRole.PATIENT)),
     ],
 ) -> list[PatientResponse]:
-    scope_condition = (
-        Patient.responsible_doctor_id == current_user.id
-        if current_user.role == UserRole.DOCTOR
-        else Patient.patient_user_id == current_user.id
-    )
+    scope_condition = patient_scope(current_user)
     patients = db.scalars(
         select(Patient).where(scope_condition).order_by(Patient.id)
     ).all()
-    return [patient_response(patient) for patient in patients]
+    output = []
+    for patient in patients:
+        info = patient_response(patient)
+        info.permissions = patient_permissions(db, patient.id, current_user)
+        output.append(info)
+    return output
 
 
 @app.get("/patients/{patient_id}", response_model=PatientResponse)
@@ -727,7 +728,7 @@ def read_patient(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[
         User,
-        Depends(require_roles(UserRole.DOCTOR, UserRole.PATIENT)),
+        Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT, UserRole.PATIENT)),
     ],
 ) -> PatientResponse:
     patient = accessible_patient_or_404(db, patient_id, current_user)
@@ -1243,7 +1244,7 @@ def submit_intake(
         upload_root.mkdir(parents=True, exist_ok=True)
         storage_name = f"{secrets.token_hex(24)}{suffix}"
         (upload_root / storage_name).write_bytes(document_bytes)
-        document_fields = dict(document_name=Path(request.document_name).name, document_mime_type=request.document_mime_type, document_storage_name=storage_name, document_sha256=hashlib.sha256(document_bytes).hexdigest())
+        document_fields = {"document_name": Path(request.document_name).name, "document_mime_type": request.document_mime_type, "document_storage_name": storage_name, "document_sha256": hashlib.sha256(document_bytes).hexdigest()}
     submission = PatientIntakeSubmission(
         intake_link_id=link.id,
         submission_digest=submission_digest,
@@ -1277,27 +1278,34 @@ def submit_intake(
 @app.get("/intake-submissions", response_model=list[IntakeSubmissionResponse])
 def list_intake_submissions(
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT))],
 ) -> list[IntakeSubmissionResponse]:
     items = db.scalars(
         select(PatientIntakeSubmission)
         .join(PatientIntakeLink, PatientIntakeSubmission.intake_link_id == PatientIntakeLink.id)
-        .where(PatientIntakeLink.created_by_doctor_id == current_user.id)
+        .where(intake_scope(current_user))
         .order_by(PatientIntakeSubmission.id.desc())
     ).all()
-    return [intake_submission_response(item, db) for item in items]
+    output = []
+    for item in items:
+        info = intake_submission_response(item, db)
+        info.permissions = [action for action in ("view", "edit", "review") if db.scalar(
+            select(PatientIntakeSubmission.id).join(PatientIntakeLink).where(PatientIntakeSubmission.id == item.id, intake_scope(current_user, action))
+        ) is not None]
+        output.append(info)
+    return output
 
 
 @app.get("/intake-submissions/{submission_id}/document", response_class=FileResponse)
 def read_intake_document(
     submission_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT))],
 ) -> FileResponse:
     submission = db.scalar(
         select(PatientIntakeSubmission)
         .join(PatientIntakeLink, PatientIntakeSubmission.intake_link_id == PatientIntakeLink.id)
-        .where(PatientIntakeSubmission.id == submission_id, PatientIntakeLink.created_by_doctor_id == current_user.id)
+        .where(PatientIntakeSubmission.id == submission_id, intake_scope(current_user))
     )
     if submission is None:
         raise HTTPException(status_code=404, detail="Intake document was not found in the allowed data scope.")
@@ -1314,12 +1322,12 @@ def review_intake_submission(
     submission_id: int,
     request: IntakeReviewRequest,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT))],
 ) -> IntakeSubmissionResponse:
     submission = db.scalar(
         select(PatientIntakeSubmission)
         .join(PatientIntakeLink, PatientIntakeSubmission.intake_link_id == PatientIntakeLink.id)
-        .where(PatientIntakeSubmission.id == submission_id, PatientIntakeLink.created_by_doctor_id == current_user.id)
+        .where(PatientIntakeSubmission.id == submission_id, intake_scope(current_user, "review"))
     )
     if submission is None:
         raise HTTPException(status_code=404, detail="Intake submission was not found in the allowed data scope.")
@@ -1331,12 +1339,13 @@ def review_intake_submission(
         if not submission.notice_version:
             raise HTTPException(status_code=409, detail="Submission is incomplete and cannot be approved.")
         link = db.get(PatientIntakeLink, submission.intake_link_id)
-        patient = db.get(Patient, link.patient_id) if link.patient_id else None
+        target_id = submission.created_patient_id or link.patient_id
+        patient = db.get(Patient, target_id) if target_id else None
         if patient is None:
             patient = Patient(
                 patient_code=generate_record_code(db, Patient, Patient.patient_code, "P"),
                 display_name=submission.display_name,
-                responsible_doctor_id=current_user.id,
+                responsible_doctor_id=link.created_by_doctor_id,
             )
             db.add(patient)
             db.flush()
@@ -1415,7 +1424,7 @@ def submit_patient_document(
 def list_patient_documents(
     patient_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.PATIENT))],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT, UserRole.PATIENT))],
 ) -> list[PatientDocumentResponse]:
     patient = accessible_patient_or_404(db, patient_id, current_user)
     documents = db.scalars(
@@ -1437,7 +1446,7 @@ def list_patient_documents(
 def read_patient_document_file(
     document_id: int,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.PATIENT))],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT, UserRole.PATIENT))],
 ) -> FileResponse:
     document = db.get(PatientDocument, document_id)
     if document is None:
@@ -1457,12 +1466,12 @@ def review_patient_document(
     document_id: int,
     request: PatientDocumentReviewRequest,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+    current_user: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT))],
 ) -> PatientDocumentResponse:
     document = db.get(PatientDocument, document_id)
     if document is None:
         raise HTTPException(status_code=404, detail="Document was not found in the allowed data scope.")
-    accessible_patient_or_404(db, document.patient_id, current_user)
+    accessible_patient_or_404(db, document.patient_id, current_user, "review")
     if document.review_status != "pending":
         return patient_document_response(document, db)
     if request.action == "approve":
@@ -1496,7 +1505,7 @@ def create_encounter(
         Depends(require_roles(UserRole.DOCTOR)),
     ],
 ) -> EncounterResponse:
-    patient = accessible_patient_or_404(db, patient_id, current_user)
+    patient = accessible_patient_or_404(db, patient_id, current_user, "edit")
     encounter = Encounter(
         encounter_code=generate_record_code(db, Encounter, Encounter.encounter_code, "E"),
         patient_id=patient.id,
@@ -1526,7 +1535,7 @@ def list_encounters(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[
         User,
-        Depends(require_roles(UserRole.DOCTOR, UserRole.PATIENT)),
+        Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT, UserRole.PATIENT)),
     ],
 ) -> list[EncounterResponse]:
     patient = accessible_patient_or_404(db, patient_id, current_user)

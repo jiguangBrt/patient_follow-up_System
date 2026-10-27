@@ -1,0 +1,9 @@
+.grant-checkboxes { display:flex; flex-wrap:wrap; gap:18px; align-items:center; }
+.grant-checkboxes label { display:flex; align-items:center; gap:6px; }
+.grant-checkboxes input { width:auto; min-height:0; }
+#teamContent > .card { margin-bottom:24px; }
+#studentForm .row { flex-wrap:nowrap; }
+#studentForm .row input { flex:1; min-width:0; }
+#studentForm .row button { flex-shrink:0; }
+.account-table td { vertical-align:top; }
+.account-table td p { margin:4px 0; }

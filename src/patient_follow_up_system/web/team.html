@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学生与权限 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261027-team-1"><link rel="stylesheet" href="/static/admin.css?v=20261027-team-1"><link rel="stylesheet" href="/static/team.css?v=20261027-team-1"></head>
+<body class="doctor-app signed-in">
+<aside id="doctorSidebar" class="doctor-sidebar"></aside>
+<main class="doctor-main">
+  <div class="workspace-topbar"><div><p class="breadcrumb">设置 / 学生与权限</p><h1>学生与权限</h1></div><span class="trial-tag">医生管理自己的学生与患者授权</span></div>
+  <p id="message" class="status" role="status" aria-live="polite">正在加载…</p>
+  <div id="teamContent" class="hidden">
+    <section class="card"><div class="toolbar"><div><h2>我的学生</h2><p class="muted">新账号默认不能查看患者。停用账号后，已有登录也无法继续请求资料。</p></div><button id="refreshTeam" class="secondary">刷新</button></div><div class="account-table-wrap"><table class="account-table"><thead><tr><th>姓名</th><th>账号</th><th>状态</th><th>上次登录（北京时间）</th><th>操作</th></tr></thead><tbody id="students"></tbody></table></div></section>
+    <section class="card"><h2>开通学生账号</h2><form id="studentForm" class="form-grid admin-account-form">
+      <label for="studentUsername">登录账号</label><input id="studentUsername" pattern="[A-Za-z0-9_][A-Za-z0-9_.-]{2,49}" maxlength="50" autocomplete="off" required placeholder="3–50 位字母、数字或 _ . -">
+      <label for="studentName">学生姓名</label><input id="studentName" maxlength="100" required>
+      <label for="studentPassword">初始密码</label><div class="row"><input id="studentPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button id="showPassword" type="button" class="secondary" aria-pressed="false">显示密码</button></div>
+      <label for="studentConfirm">确认初始密码</label><div class="row"><input id="studentConfirm" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button id="showConfirm" type="button" class="secondary" aria-pressed="false">显示密码</button></div>
+      <div class="row full-row"><button type="submit">开通学生账号</button></div>
+    </form></section>
+    <section class="card"><h2>分配患者权限</h2><p class="muted">每条授权都包含查看权限；录入允许上传、OCR 和暂存草稿；审核允许确认入档及批准/驳回。多条有效授权的权限合并，撤销时需检查所有有效记录。学生不能新建患者、管理二维码或再次授权。队列与资料导出尚未开放。</p>
+    <form id="grantForm" class="form-grid admin-account-form">
+      <label for="grantStudent">学生</label><select id="grantStudent" required></select>
+      <label for="grantPatient">患者</label><select id="grantPatient" required></select>
+      <label for="grantPurpose">工作用途</label><input id="grantPurpose" required maxlength="300" placeholder="例如：虚构胃炎病例整理">
+      <label for="grantStart">开始时间（本机时区）</label><input id="grantStart" type="datetime-local" required>
+      <label for="grantEnd">结束时间（本机时区）</label><input id="grantEnd" type="datetime-local" required>
+      <span>操作权限</span><div class="grant-checkboxes"><span>查看（必选）</span><label><input id="grantEdit" type="checkbox">录入 / OCR / 暂存</label><label><input id="grantReview" type="checkbox">审核 / 确认入档 / 驳回</label></div>
+      <div class="row full-row"><button type="submit">授予权限</button></div>
+    </form></section>
+    <section class="card"><h2>授权与撤销记录</h2><p class="muted">变更权限时先撤销原授权，再新增授权，历史记录会保留。</p><div class="account-table-wrap"><table class="account-table"><thead><tr><th>学生 / 患者</th><th>权限与用途</th><th>有效期（北京时间）</th><th>状态 / 撤销记录</th><th>操作</th></tr></thead><tbody id="grants"></tbody></table></div></section>
+  </div>
+</main><script src="/static/session.js?v=20261027-team-1"></script><script src="/static/doctor-shell.js?v=20261027-team-1"></script><script src="/static/team.js?v=20261027-team-1"></script>
+</body></html>

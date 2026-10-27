@@ -86,6 +86,7 @@ def create_samples():
 
 
 def main():
+    global REVIEW_ROOT
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--host",
@@ -96,9 +97,11 @@ def main():
         "--public-base-url", help="二维码使用的外部站点地址，例如 http://热点IPv4:8011"
     )
     parser.add_argument("--port", type=int, default=8010)
+    parser.add_argument("--data-dir", type=Path, default=REVIEW_ROOT, help="本机隔离验收目录，不使用应用日常数据库")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--open-browser", action="store_true")
     args = parser.parse_args()
+    REVIEW_ROOT = args.data_dir.resolve()
     REVIEW_ROOT.mkdir(parents=True, exist_ok=True)
     public_url_path = REVIEW_ROOT / "public-base-url.txt"
     if args.public_base_url:

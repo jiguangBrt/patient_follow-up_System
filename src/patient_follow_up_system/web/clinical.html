@@ -7,7 +7,7 @@
   <div class="workspace-topbar"><div><p class="breadcrumb">诊疗管理 / 病例识别与审核</p><h1>病例识别与审核</h1></div><span class="trial-tag">原件留存 · 医生确认后入档</span></div>
   <p id="message" class="status" role="status" aria-live="polite">正在加载…</p>
   <section id="uploadCard" class="card"><h2>上传病例原件</h2><p>上传后先存入缓冲区。识别姓名仅作候选；确认入档前不绑定患者或患者账号。支持 JPG、PNG、PDF（8 MB 以内，PDF 最多 10 页）。</p>
-    <form id="uploadForm" class="row"><input id="file" type="file" accept="image/jpeg,image/png,application/pdf" aria-label="病例原件" required><button id="uploadButton">上传到缓冲区</button></form>
+    <form id="uploadForm" class="row"><select id="uploadPatient" class="hidden" aria-label="选择已获录入授权的患者"></select><input id="file" type="file" accept="image/jpeg,image/png,application/pdf" aria-label="病例原件" required><button id="uploadButton">上传到缓冲区</button></form><p id="studentUploadHelp" class="muted hidden">学生上传前须选择已获录入授权的患者；上传与暂存不会自动确认入档。</p>
   </section>
   <section id="bufferCard" class="card"><div class="toolbar"><h2>病例缓冲区与审核记录</h2><button id="refresh" class="secondary">刷新缓冲区</button></div><div id="documents"></div></section>
   <section id="reviewCard" class="card hidden">
@@ -24,4 +24,4 @@
     </div>
     <pre id="historyText" class="hidden"></pre>
   </section>
-</main><script src="/static/session.js?v=20261020"></script><script src="/static/doctor-shell.js?v=20261020-3"></script><script src="/static/clinical.js?v=20261024-visits-1"></script></body></html>
+</main><script src="/static/session.js?v=20261027-team-1"></script><script src="/static/doctor-shell.js?v=20261027-team-1"></script><script src="/static/clinical.js?v=20261027-team-1"></script></body></html>

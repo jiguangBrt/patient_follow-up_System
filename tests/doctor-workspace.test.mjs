@@ -24,9 +24,9 @@ async function setup(override={}) {
   for(const id of ["patientsCard","intakesCard","noticeCard","placeholderCard","inviteCard","newPatientCard","message"])$(id).className="hidden";
   const calls=[];let resolver=override.resolve;
   const storage=new Map();const location={hash:"#patients",href:"https://example.test/patientfollowup/doctor#patients"};
-  const sandbox={document:{getElementById:$,createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),body:new Element("body")},AppSession:{require:()=>"fixture-token"},AppPaths:{url:p=>"/patientfollowup"+p,storage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},fetch:async(path,options={})=>{
+  const sandbox={document:{getElementById:$,createElement:tag=>new Element(tag),createTextNode:text=>({textContent:text}),body:new Element("body")},AppSession:{staffRole:()=>override.role||"doctor",require:()=>"fixture-token"},AppPaths:{url:p=>"/patientfollowup"+p,storage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},fetch:async(path,options={})=>{
     calls.push(path);let data;
-    if(path==="/auth/me")data={id:11,role:"doctor",display_name:"Fixture doctor"};
+    if(path==="/auth/me")data={id:11,role:override.role||"doctor",display_name:"Fixture doctor"};
     else if(path==="/patients")data=patients;
     else if(path==="/doctor/patient-notices/current")data={title:"Fixture notice",version:"1",content:"Fixture"};
     else if(path.endsWith("/intake-link"))data={id:9,display_name:"虚构患者甲",state:"available",intake_url:"https://example.test/patientfollowup/intake#token=fixture",qr_svg:"<svg/>"};
@@ -69,4 +69,11 @@ test("search changes only the name list and keeps the active archive",async()=>{
   const {$}=await setup();$("patientSearch").value="患者乙";$("patientSearch").oninput();
   assert.equal($("patients").children.length,1);assert.equal($("patients").children[0].textContent,"虚构患者乙");
   assert.equal($("patientHeading").textContent,"虚构患者甲");
+});
+
+test("student uses the same patient workspace with account and QR management hidden",async()=>{
+  const {$}=await setup({role:"student"});
+  assert.ok(!$("patientsCard").classList.contains("hidden"));
+  for(const id of ["showNewPatient","showPatientQr","createIntakeLink"])assert.ok($(id).classList.contains("hidden"));
+  assert.equal($("patients").children.length,2);
 });

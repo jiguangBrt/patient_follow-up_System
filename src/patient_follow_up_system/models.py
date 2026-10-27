@@ -1,20 +1,23 @@
 from datetime import date, datetime
 from enum import StrEnum
+from typing import ClassVar
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
-    Enum as SqlEnum,
     ForeignKey,
-    Integer,
-    JSON,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
     func,
     text,
+)
+from sqlalchemy import (
+    Enum as SqlEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +27,7 @@ from patient_follow_up_system.database import Base
 class UserRole(StrEnum):
     ADMIN = "admin"
     DOCTOR = "doctor"
+    STUDENT = "student"
     PATIENT = "patient"
 
 
@@ -62,11 +66,35 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
     )
+    mentor_doctor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.current_timestamp(),
         nullable=False,
     )
+
+
+class PatientGrant(Base):
+    """Append-only authorization history; change permissions by revoking and regranting."""
+
+    __tablename__ = "patient_grants"
+    __table_args__ = (
+        CheckConstraint("ends_at > starts_at", name="ck_patient_grant_dates"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    granted_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    purpose: Mapped[str] = mapped_column(String(300))
+    can_edit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp())
 
 
 class Patient(Base):
@@ -393,7 +421,7 @@ class ClinicalDocument(Base):
     reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
-    __mapper_args__ = {"version_id_col": version}
+    __mapper_args__: ClassVar[dict] = {"version_id_col": version}
 
 
 class ClinicalField(Base):

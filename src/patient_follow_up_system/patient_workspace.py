@@ -4,7 +4,7 @@ from datetime import UTC
 from typing import Annotated
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -15,13 +15,13 @@ from patient_follow_up_system.database import get_db
 from patient_follow_up_system.models import (
     ClinicalDocument,
     Encounter,
-    Patient,
     PatientDocument,
     PatientIntakeLink,
     PatientIntakeSubmission,
     User,
     UserRole,
 )
+from patient_follow_up_system.permissions import patient_permissions, require_patient
 from patient_follow_up_system.visit_dates import suggest_visit_date
 
 router = APIRouter()
@@ -31,15 +31,10 @@ router = APIRouter()
 def patient_workspace(
     patient_id: int,
     db: Annotated[Session, Depends(get_db)],
-    doctor: Annotated[User, Depends(require_roles(UserRole.DOCTOR))],
+    doctor: Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT))],
 ):
-    patient = db.scalar(
-        select(Patient).where(
-            Patient.id == patient_id, Patient.responsible_doctor_id == doctor.id
-        )
-    )
-    if patient is None:
-        raise HTTPException(404, "患者不在负责范围内。")
+    patient = require_patient(db, patient_id, doctor)
+    owner_id = patient.responsible_doctor_id
     submissions = list(
         db.scalars(
             select(PatientIntakeSubmission)
@@ -48,7 +43,7 @@ def patient_workspace(
                 PatientIntakeSubmission.intake_link_id == PatientIntakeLink.id,
             )
             .where(
-                PatientIntakeLink.created_by_doctor_id == doctor.id,
+                PatientIntakeLink.created_by_doctor_id == owner_id,
                 or_(
                     PatientIntakeLink.patient_id == patient_id,
                     PatientIntakeSubmission.created_patient_id == patient_id,
@@ -68,7 +63,7 @@ def patient_workspace(
         db.scalars(
             select(ClinicalDocument)
             .where(
-                ClinicalDocument.owner_doctor_id == doctor.id,
+                ClinicalDocument.owner_doctor_id == owner_id,
                 or_(
                     ClinicalDocument.patient_id == patient_id,
                     (ClinicalDocument.source_kind == "intake")
@@ -129,7 +124,7 @@ def patient_workspace(
             )
     for row in db.scalars(
         select(Encounter).where(
-            Encounter.patient_id == patient_id, Encounter.doctor_id == doctor.id
+            Encounter.patient_id == patient_id
         )
     ):
         when = (
@@ -143,6 +138,7 @@ def patient_workspace(
         )
     latest = submissions[0] if submissions else None
     return {
+        "permissions": patient_permissions(db, patient_id, doctor),
         "profile": {
             "sex": latest.sex,
             "date_of_birth": latest.date_of_birth,

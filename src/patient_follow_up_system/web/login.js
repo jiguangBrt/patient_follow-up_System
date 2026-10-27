@@ -1,6 +1,6 @@
 (() => {
   const $ = id => document.getElementById(id);
-  const descriptions = {patient:"查看本人档案，向医生提交就诊资料。", doctor:"管理患者档案，核对与整理病历资料。", admin:"管理平台账号，维护账号的启用状态。"};
+  const descriptions = {patient:"查看本人档案，向医生提交就诊资料。", doctor:"管理患者档案，核对病历，管理学生及患者授权。", student:"在所属医生授权范围内整理患者资料。", admin:"管理平台账号，维护账号的启用状态。"};
   let selectedRole = "doctor";
   let busy = false;
   function chooseRole(role) {

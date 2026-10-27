@@ -11,7 +11,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
@@ -19,8 +19,6 @@ from sqlalchemy.orm.exc import StaleDataError
 from patient_follow_up_system import clinical_ocr
 from patient_follow_up_system.auth import require_roles
 from patient_follow_up_system.database import get_db
-from patient_follow_up_system.web_pages import page_response
-from patient_follow_up_system.visit_dates import suggest_visit_date
 from patient_follow_up_system.models import (
     ClinicalDocument,
     ClinicalField,
@@ -33,10 +31,17 @@ from patient_follow_up_system.models import (
     User,
     UserRole,
 )
+from patient_follow_up_system.permissions import (
+    intake_scope,
+    patient_scope,
+    require_patient,
+)
+from patient_follow_up_system.visit_dates import suggest_visit_date
+from patient_follow_up_system.web_pages import page_response
 
 router = APIRouter()
 DB = Annotated[Session, Depends(get_db)]
-Doctor = Annotated[User, Depends(require_roles(UserRole.DOCTOR))]
+Doctor = Annotated[User, Depends(require_roles(UserRole.DOCTOR, UserRole.STUDENT))]
 
 
 @router.get("/clinical", include_in_schema=False)
@@ -48,6 +53,7 @@ class BufferUpload(BaseModel):
     document_name: str = Field(min_length=1, max_length=255)
     document_mime_type: Literal["image/jpeg", "image/png", "application/pdf"]
     document_base64: str = Field(min_length=4, max_length=11_200_000)
+    patient_id: int | None = Field(default=None, ge=1)
 
 
 class SourceImport(BaseModel):
@@ -87,11 +93,23 @@ def original_path(doc: ClinicalDocument) -> Path:
     return roots[doc.source_kind] / doc.storage_name
 
 
-def own_document(db: Session, document_id: int, doctor: User) -> ClinicalDocument:
+def document_scope(doctor: User, operation: str = "view"):
+    if doctor.role == UserRole.DOCTOR:
+        return ClinicalDocument.owner_doctor_id == doctor.id
+    patients = select(Patient.id).where(patient_scope(doctor, operation))
+    sources = select(PatientIntakeSubmission.id).join(PatientIntakeLink).where(intake_scope(doctor, operation))
+    return (ClinicalDocument.owner_doctor_id == doctor.mentor_doctor_id) & or_(
+        ClinicalDocument.patient_id.in_(patients),
+        (ClinicalDocument.source_kind == "patient") & ClinicalDocument.source_id.in_(select(PatientDocument.id).where(PatientDocument.patient_id.in_(patients))),
+        (ClinicalDocument.source_kind == "intake") & ClinicalDocument.source_id.in_(sources),
+    )
+
+
+def own_document(db: Session, document_id: int, doctor: User, operation: str = "view") -> ClinicalDocument:
     doc = db.scalar(
         select(ClinicalDocument).where(
             ClinicalDocument.id == document_id,
-            ClinicalDocument.owner_doctor_id == doctor.id,
+            document_scope(doctor, operation),
         )
     )
     if doc is None:
@@ -130,7 +148,7 @@ def field_info(field: ClinicalField) -> dict:
     }
 
 
-def document_info(db: Session, doc: ClinicalDocument, detail: bool = True) -> dict:
+def document_info(db: Session, doc: ClinicalDocument, detail: bool = True, user: User | None = None) -> dict:
     fields = fields_for(db, doc.id)
     name = next(
         (
@@ -143,6 +161,7 @@ def document_info(db: Session, doc: ClinicalDocument, detail: bool = True) -> di
     data = {
         "id": doc.id,
         "patient_id": doc.patient_id,
+        "target_patient_id": document_target_id(db, doc),
         "visit_date": doc.visit_date,
         "suggested_visit_date": suggest_visit_date(fields),
         "status": doc.status,
@@ -165,6 +184,8 @@ def document_info(db: Session, doc: ClinicalDocument, detail: bool = True) -> di
     }
     if detail:
         data.update(fields=[field_info(f) for f in fields], pages=doc.pages)
+    if user is not None:
+        data["permissions"] = [action for action in ("view", "edit", "review") if db.scalar(select(ClinicalDocument.id).where(ClinicalDocument.id == doc.id, document_scope(user, action))) is not None]
     return data
 
 
@@ -178,6 +199,10 @@ def commit(db: Session):
 
 @router.post("/clinical-documents", status_code=201)
 def upload(request: BufferUpload, db: DB, doctor: Doctor):
+    if doctor.role == UserRole.STUDENT and request.patient_id is None:
+        raise HTTPException(422, "学生上传前必须选择已获录入授权的患者。")
+    if request.patient_id is not None:
+        require_patient(db, request.patient_id, doctor, "edit")
     try:
         content = base64.b64decode(request.document_base64, validate=True)
     except (ValueError, binascii.Error) as exc:
@@ -203,7 +228,8 @@ def upload(request: BufferUpload, db: DB, doctor: Doctor):
             422, "文件不能解析，请使用完整 JPG、PNG 或不超过 10 页的 PDF。"
         ) from exc
     doc = ClinicalDocument(
-        owner_doctor_id=doctor.id,
+        owner_doctor_id=doctor.mentor_doctor_id if doctor.role == UserRole.STUDENT else doctor.id,
+        patient_id=request.patient_id,
         source_kind="buffer",
         original_name=Path(request.document_name.replace("\\", "/")).name,
         storage_name=name,
@@ -227,7 +253,7 @@ def upload(request: BufferUpload, db: DB, doctor: Doctor):
         db.rollback()
         path.unlink(missing_ok=True)
         raise
-    return document_info(db, doc)
+    return document_info(db, doc, user=doctor)
 
 
 @router.post("/clinical-documents/import")
@@ -238,7 +264,7 @@ def import_source(request: SourceImport, db: DB, doctor: Doctor):
             .join(Patient, Patient.id == PatientDocument.patient_id)
             .where(
                 PatientDocument.id == request.source_id,
-                Patient.responsible_doctor_id == doctor.id,
+                patient_scope(doctor),
             )
         )
         if source is None:
@@ -256,7 +282,7 @@ def import_source(request: SourceImport, db: DB, doctor: Doctor):
             .join(PatientIntakeLink)
             .where(
                 PatientIntakeSubmission.id == request.source_id,
-                PatientIntakeLink.created_by_doctor_id == doctor.id,
+                intake_scope(doctor),
             )
         )
         if source is None or not source.document_storage_name:
@@ -281,9 +307,13 @@ def import_source(request: SourceImport, db: DB, doctor: Doctor):
         )
     )
     if existing:
-        return document_info(db, own_document(db, existing.id, doctor))
+        return document_info(db, own_document(db, existing.id, doctor), user=doctor)
+    if request.source_kind == "patient":
+        require_patient(db, source.patient_id, doctor, "edit")
+    elif not db.scalar(select(PatientIntakeSubmission.id).join(PatientIntakeLink).where(PatientIntakeSubmission.id == source.id, intake_scope(doctor, "edit"))):
+        raise HTTPException(404, "没有该原件的录入权限。")
     doc = ClinicalDocument(
-        owner_doctor_id=doctor.id,
+        owner_doctor_id=doctor.mentor_doctor_id if doctor.role == UserRole.STUDENT else doctor.id,
         source_kind=request.source_kind,
         source_id=request.source_id,
         **values,
@@ -291,22 +321,22 @@ def import_source(request: SourceImport, db: DB, doctor: Doctor):
     db.add(doc)
     initialize_fields(db, doc)
     commit(db)
-    return document_info(db, doc)
+    return document_info(db, doc, user=doctor)
 
 
 @router.get("/clinical-documents")
 def list_documents(db: DB, doctor: Doctor):
     docs = db.scalars(
         select(ClinicalDocument)
-        .where(ClinicalDocument.owner_doctor_id == doctor.id)
+        .where(document_scope(doctor))
         .order_by(ClinicalDocument.id.desc())
     )
-    return [document_info(db, doc, False) for doc in docs]
+    return [document_info(db, doc, False, user=doctor) for doc in docs]
 
 
 @router.get("/clinical-documents/{document_id}")
 def detail(document_id: int, db: DB, doctor: Doctor):
-    return document_info(db, own_document(db, document_id, doctor))
+    return document_info(db, own_document(db, document_id, doctor), user=doctor)
 
 
 @router.get("/clinical-documents/{document_id}/file")
@@ -345,7 +375,7 @@ def preview(document_id: int, page_number: int, db: DB, doctor: Doctor):
 
 @router.post("/clinical-documents/{document_id}/extract")
 def extract(document_id: int, request: ExtractionRequest, db: DB, doctor: Doctor):
-    doc = own_document(db, document_id, doctor)
+    doc = own_document(db, document_id, doctor, "edit")
     if doc.status != "buffered" or doc.version != request.version:
         raise HTTPException(409, "只能提取当前版本的缓冲区资料，请刷新。")
     if doc.visit_date is not None or any(f.review_status != "pending" or f.confirmed_value is not None for f in fields_for(db, doc.id)):
@@ -369,7 +399,7 @@ def extract(document_id: int, request: ExtractionRequest, db: DB, doctor: Doctor
             "extraction_version": clinical_ocr.OCR_VERSION,
         }
         error = "OCR 未能完成，请重试或对照原件手工录入。"
-    doc = own_document(db, document_id, doctor)
+    doc = own_document(db, document_id, doctor, "edit")
     if doc.version != version or doc.status != "buffered":
         raise HTTPException(409, "提取期间资料已更新，结果未覆盖，请刷新。")
     by_key = {f.key: f for f in fields_for(db, doc.id)}
@@ -399,7 +429,20 @@ def extract(document_id: int, request: ExtractionRequest, db: DB, doctor: Doctor
         )
     )
     commit(db)
-    return document_info(db, doc)
+    return document_info(db, doc, user=doctor)
+
+
+def document_target_id(db: Session, doc: ClinicalDocument) -> int | None:
+    if doc.source_kind == "patient":
+        source = db.get(PatientDocument, doc.source_id)
+        return source.patient_id if source else None
+    if doc.source_kind == "intake":
+        source = db.get(PatientIntakeSubmission, doc.source_id)
+        if source is None:
+            return None
+        link = db.get(PatientIntakeLink, source.intake_link_id)
+        return source.created_patient_id or link.patient_id
+    return doc.patient_id
 
 
 def source_target(db: Session, doc: ClinicalDocument) -> int | None:
@@ -414,12 +457,17 @@ def source_target(db: Session, doc: ClinicalDocument) -> int | None:
             raise HTTPException(409, "建档申请已驳回，不能入档。")
         link = db.get(PatientIntakeLink, source.intake_link_id)
         return source.created_patient_id or link.patient_id
-    return None
+    return doc.patient_id
 
 
 @router.post("/clinical-documents/{document_id}/review")
 def review(document_id: int, request: Review, db: DB, doctor: Doctor):
-    doc = own_document(db, document_id, doctor)
+    operation = "review" if request.action != "save" or any(f.review_status != "pending" for f in request.fields) else "edit"
+    doc = own_document(db, document_id, doctor, operation)
+    if doctor.role == UserRole.STUDENT and request.create_patient:
+        raise HTTPException(403, "学生不能新建患者档案，请由所属医生建档并授权。")
+    if doctor.role == UserRole.STUDENT and doc.status == "filed":
+        own_document(db, document_id, doctor, "review")
     if doc.status == "rejected" or doc.version != request.version:
         raise HTTPException(409, "资料已更新或已驳回，请刷新。")
     if doc.status == "filed" and request.action != "save":
@@ -466,7 +514,8 @@ def review(document_id: int, request: Review, db: DB, doctor: Doctor):
         field.reviewed_at = now
     if request.action == "reject":
         doc.status = "rejected"
-        doc.patient_id = None
+        # Keep an explicitly assigned buffer patient so rejected work remains
+        # visible to the authorized team and cannot be rebound elsewhere.
     elif request.action == "file":
         if doc.visit_date is None:
             raise HTTPException(422, "请核对并填写就诊日期，再确认归档。同一天的资料归为同一次就诊。")
@@ -504,14 +553,7 @@ def review(document_id: int, request: Review, db: DB, doctor: Doctor):
             db.add(patient)
             db.flush()
         else:
-            patient = db.scalar(
-                select(Patient).where(
-                    Patient.id == request.patient_id,
-                    Patient.responsible_doctor_id == doctor.id,
-                )
-            )
-            if patient is None:
-                raise HTTPException(404, "患者不在负责范围内。")
+            patient = require_patient(db, request.patient_id, doctor, "review")
             if patient.display_name != name.confirmed_value:
                 raise HTTPException(
                     409, "确认姓名与所选患者名称不一致，请核对原件及患者身份。"
@@ -548,18 +590,12 @@ def review(document_id: int, request: Review, db: DB, doctor: Doctor):
         )
     )
     commit(db)
-    return document_info(db, doc)
+    return document_info(db, doc, user=doctor)
 
 
 @router.get("/patients/{patient_id}/clinical-records")
 def patient_records(patient_id: int, db: DB, doctor: Doctor):
-    patient = db.scalar(
-        select(Patient).where(
-            Patient.id == patient_id, Patient.responsible_doctor_id == doctor.id
-        )
-    )
-    if patient is None:
-        raise HTTPException(404, "患者不在负责范围内。")
+    require_patient(db, patient_id, doctor)
     output = []
     for doc in db.scalars(
         select(ClinicalDocument)
