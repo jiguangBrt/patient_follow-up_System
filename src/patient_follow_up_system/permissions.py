@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from fastapi import HTTPException
-from sqlalchemy import false, func, select
+from sqlalchemy import false, func, or_, select
 from sqlalchemy.orm import Session
 
 from patient_follow_up_system.models import (
@@ -24,19 +24,21 @@ def patient_scope(user: User, operation: str = "view"):
     if user.role != UserRole.STUDENT or operation not in ("view", "edit", "review"):
         return false()
     now = datetime.now(UTC).replace(tzinfo=None)
-    grants = select(PatientGrant.patient_id).where(
+    grants = select(PatientGrant.id).where(
         PatientGrant.student_id == user.id,
         PatientGrant.granted_by_id == user.mentor_doctor_id,
         PatientGrant.revoked_at.is_(None),
-        PatientGrant.starts_at <= now,
-        PatientGrant.ends_at > now,
+        PatientGrant.can_view.is_(True),
+        or_(PatientGrant.starts_at.is_(None), PatientGrant.starts_at <= now),
+        or_(PatientGrant.ends_at.is_(None), PatientGrant.ends_at > now),
+        or_(PatientGrant.patient_id.is_(None), PatientGrant.patient_id == Patient.id),
     )
     if operation == "edit":
         grants = grants.where(PatientGrant.can_edit.is_(True))
     elif operation == "review":
         grants = grants.where(PatientGrant.can_review.is_(True))
     return (
-        Patient.id.in_(grants)
+        grants.correlate(Patient).exists()
         & (Patient.responsible_doctor_id == user.mentor_doctor_id)
         & select(User.id)
         .where(

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学生与权限 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261027-team-1"><link rel="stylesheet" href="/static/admin.css?v=20261027-team-1"><link rel="stylesheet" href="/static/team.css?v=20261027-team-2"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学生与权限 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261027-team-1"><link rel="stylesheet" href="/static/admin.css?v=20261027-team-1"><link rel="stylesheet" href="/static/team.css?v=20261027-team-3"></head>
 <body class="doctor-app signed-in">
 <aside id="doctorSidebar" class="doctor-sidebar"></aside>
 <main class="doctor-main">
@@ -8,11 +8,11 @@
   <p id="message" class="status hidden" role="status" aria-live="polite"></p>
   <section id="teamContent" class="card hidden" aria-label="学生列表">
     <div class="toolbar team-toolbar"><div><h2>学生列表 <span id="studentCount" class="muted"></span></h2><p class="muted">管理学生账号与患者访问权限</p></div><div class="row"><button id="refreshTeam" type="button" class="secondary">刷新</button><button id="newStudent" type="button" aria-haspopup="dialog" aria-controls="studentDialog">＋ 新增学生</button></div></div>
-    <div class="account-table-wrap"><table class="account-table"><thead><tr><th scope="col">姓名</th><th scope="col">账号</th><th scope="col">状态</th><th scope="col">已授权患者</th><th scope="col">上次登录（北京时间）</th><th scope="col">操作</th></tr></thead><tbody id="students"></tbody></table></div>
+    <div class="account-table-wrap"><table class="account-table"><thead><tr><th scope="col">姓名</th><th scope="col">账号</th><th scope="col">状态</th><th scope="col">学生权限</th><th scope="col">上次登录（北京时间）</th><th scope="col">操作</th></tr></thead><tbody id="students"></tbody></table></div>
   </section>
 </main>
 <dialog id="studentDialog" class="team-dialog" aria-labelledby="studentDialogTitle">
-  <header class="team-dialog-header"><div><h2 id="studentDialogTitle">新增学生</h2><p class="muted">开通账号后，可继续为学生分配患者权限。</p></div><button type="button" data-close="studentDialog" class="dialog-close" aria-label="关闭新增学生">×</button></header>
+  <header class="team-dialog-header"><div><h2 id="studentDialogTitle">新增学生</h2><p class="muted">开通账号后，可继续设置学生权限。</p></div><button type="button" data-close="studentDialog" class="dialog-close" aria-label="关闭新增学生">×</button></header>
   <p id="studentError" class="status error hidden dialog-error" role="alert"></p>
   <form id="studentForm" class="team-dialog-form">
     <div class="team-dialog-body form-grid">
@@ -25,26 +25,23 @@
   </form>
 </dialog>
 <dialog id="grantDialog" class="team-dialog" aria-labelledby="grantDialogTitle">
-  <header class="team-dialog-header"><div><h2 id="grantDialogTitle">分配患者权限</h2><p id="grantStudentName" class="muted"></p></div><button type="button" data-close="grantDialog" class="dialog-close" aria-label="关闭分配权限">×</button></header>
+  <header class="team-dialog-header"><div><h2 id="grantDialogTitle">设置学生权限</h2></div><button type="button" data-close="grantDialog" class="dialog-close" aria-label="关闭分配权限">×</button></header>
   <p id="grantError" class="status error hidden dialog-error" role="alert"></p>
   <form id="grantForm" class="team-dialog-form">
     <input id="grantStudent" type="hidden">
     <div class="team-dialog-body form-grid">
-      <label for="grantPatient">患者</label><select id="grantPatient" required></select>
-      <label for="grantPurpose">工作用途</label><input id="grantPurpose" required maxlength="300" placeholder="例如：胃炎病例整理">
-      <label for="grantStart">开始时间</label><input id="grantStart" type="datetime-local" required>
-      <label for="grantEnd">结束时间</label><input id="grantEnd" type="datetime-local" required>
-      <span class="field-label">操作权限</span><div class="grant-checkboxes"><span>查看（默认包含）</span><label><input id="grantEdit" type="checkbox">录入、OCR 与暂存</label><label><input id="grantReview" type="checkbox">审核、确认入档与驳回</label></div>
-      <p class="muted full-row">时间按本机时区填写。多条有效授权合并生效，变更权限请先撤销原授权。</p>
+      <span class="field-label">有效期</span><div class="grant-period-row"><fieldset id="grantPeriod" class="grant-period-fields" aria-label="授权日期范围"><input id="grantStart" type="date" aria-label="开始日期" required><span>至</span><input id="grantEnd" type="date" aria-label="截止日期" required></fieldset><label class="permanent-option"><input id="grantPermanent" type="checkbox">永久有效</label></div>
+      <span class="field-label">操作权限</span><div class="grant-checkboxes"><label><input id="grantView" type="checkbox" checked>查看</label><label><input id="grantEdit" type="checkbox">录入、OCR 与暂存</label><label><input id="grantReview" type="checkbox">审核、确认入档与驳回</label></div>
+      <label for="grantNote">备注</label><textarea id="grantNote" class="grant-note" maxlength="300" rows="2" placeholder="选填"></textarea>
     </div>
-    <footer class="team-dialog-footer"><button type="button" class="secondary" data-close="grantDialog">取消</button><button id="createGrantButton" type="submit">授予权限</button></footer>
+    <footer class="team-dialog-footer"><button type="button" class="secondary" data-close="grantDialog">取消</button><button id="createGrantButton" type="submit">保存权限</button></footer>
   </form>
 </dialog>
 <dialog id="recordsDialog" class="team-dialog records-dialog" aria-labelledby="recordsDialogTitle">
-  <header class="team-dialog-header"><div><h2 id="recordsDialogTitle">授权记录</h2><p class="muted">查看患者授权，保留到期及撤销历史。</p></div><button type="button" data-close="recordsDialog" class="dialog-close" aria-label="关闭授权记录">×</button></header>
+  <header class="team-dialog-header"><div><h2 id="recordsDialogTitle">授权记录</h2><p class="muted">查看权限设置与变更历史。</p></div><button type="button" data-close="recordsDialog" class="dialog-close" aria-label="关闭授权记录">×</button></header>
   <p id="recordsError" class="status error hidden dialog-error" role="alert"></p>
-  <div class="team-dialog-body account-table-wrap"><table class="account-table"><thead><tr><th scope="col">患者</th><th scope="col">权限与用途</th><th scope="col">有效期（北京时间）</th><th scope="col">状态 / 撤销记录</th><th scope="col">操作</th></tr></thead><tbody id="grants"></tbody></table></div>
-  <footer class="team-dialog-footer"><button type="button" class="secondary" data-close="recordsDialog">关闭</button><button id="grantFromRecords" type="button">分配权限</button></footer>
+  <div class="team-dialog-body account-table-wrap"><table class="account-table"><thead><tr><th scope="col">范围</th><th scope="col">权限与备注</th><th scope="col">有效期（北京时间）</th><th scope="col">状态 / 撤销记录</th><th scope="col">操作</th></tr></thead><tbody id="grants"></tbody></table></div>
+  <footer class="team-dialog-footer"><button type="button" class="secondary" data-close="recordsDialog">关闭</button><button id="grantFromRecords" type="button">设置权限</button></footer>
 </dialog>
-<script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261027-team-1"></script><script src="/static/team.js?v=20261027-team-2"></script>
+<script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261027-team-1"></script><script src="/static/team.js?v=20261027-team-3"></script>
 </body></html>

@@ -44,7 +44,7 @@ function renderPatients() {
     const button=actionButton(patient.display_name,()=>selectPatient(patient.id));button.className=`patient-name-button ${patient.id===selectedPatientId?"selected":""}`;
     button.setAttribute("aria-pressed",String(patient.id===selectedPatientId));button.dataset.patientId=patient.id;button.title=patient.patient_code;return button;
   }));
-  if(!items.length)$("patients").append(node("p",query?"没有匹配的患者":"暂无患者，请先新增患者。","muted"));
+  if(!items.length)$("patients").append(node("p",query?"没有匹配的患者":isStudent?"暂无可查看患者，请联系所属医生。":"暂无患者，请先新增患者。","muted"));
 }
 async function loadPatients(preferred=selectedPatientId) {
   doctorPatients=await api("/patients");
@@ -153,5 +153,5 @@ $("revokeInvite").onclick=async()=>{
 ["newPatientCard","inviteCard"].forEach(id=>{$(id).onclose=()=>$(id).classList.add("hidden");});
 $("logout").onclick=()=>AppSession.logout(staffRole);window.addEventListener("hashchange",activateDoctorView);
 window.addEventListener("pageshow",event=>{if(event.persisted&&token)loadPatients().catch(error=>message(error.message,true));});
-async function init(){if(!token)return;try{const me=await api("/auth/me");if(me.role!==staffRole){AppSession.logout(staffRole);return;}doctorId=me.id;DoctorShell.setUser(me.display_name);if(isStudent){["showNewPatient","showPatientQr","createIntakeLink"].forEach(id=>$(id).classList.add("hidden"));}activateDoctorView();await Promise.all([loadPatients(),loadCurrentNotice()]);if(isStudent&&!doctorPatients.length){$("patientMeta").textContent="请联系所属医生分配患者权限。";$("patientDetailScroll").replaceChildren(emptyState("暂无患者授权","所属医生分配患者后，刷新页面即可查看；已到期或撤销的授权不再显示。"));}}catch(error){message(error.message,true);}}
+async function init(){if(!token)return;try{const me=await api("/auth/me");if(me.role!==staffRole){AppSession.logout(staffRole);return;}doctorId=me.id;DoctorShell.setUser(me.display_name);if(isStudent){["showNewPatient","showPatientQr","createIntakeLink"].forEach(id=>$(id).classList.add("hidden"));}activateDoctorView();await Promise.all([loadPatients(),loadCurrentNotice()]);if(isStudent&&!doctorPatients.length){$("patientMeta").textContent="请联系所属医生设置访问权限。";$("patientDetailScroll").replaceChildren(emptyState("暂无访问权限","医生开启查看权限后，刷新即可查看其名下患者；权限到期或撤销后无法访问。"));}}catch(error){message(error.message,true);}}
 init();

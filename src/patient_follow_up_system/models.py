@@ -81,17 +81,19 @@ class PatientGrant(Base):
 
     __tablename__ = "patient_grants"
     __table_args__ = (
-        CheckConstraint("ends_at > starts_at", name="ck_patient_grant_dates"),
+        CheckConstraint("(starts_at IS NULL AND ends_at IS NULL) OR (starts_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at > starts_at)", name="ck_patient_grant_dates"),
+        CheckConstraint("can_view OR (NOT can_edit AND NOT can_review)", name="ck_patient_grant_view"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
-    patient_id: Mapped[int] = mapped_column(ForeignKey("patients.id"), index=True)
+    patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), index=True, nullable=True)
     student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     granted_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     purpose: Mapped[str] = mapped_column(String(300))
+    can_view: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)
     can_edit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     can_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp())

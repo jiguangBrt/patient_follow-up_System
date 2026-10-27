@@ -21,8 +21,8 @@ async function setup(role="doctor"){
   const elements=new Map(),calls=[];
   const $=id=>{if(!elements.has(id))elements.set(id,new Element());return elements.get(id);};
   $("studentForm").reset=()=>["studentUsername","studentName","studentPassword","studentConfirm"].forEach(id=>{$(id).value="";});
-  $("grantForm").reset=()=>{["grantStudent","grantPatient","grantPurpose","grantStart","grantEnd"].forEach(id=>{$(id).value="";});$("grantEdit").checked=false;$("grantReview").checked=false;};
-  const responses={"/auth/me":{role,display_name:"虚构医生"},"/doctor/students":[{id:8,username:"fixture",display_name:"虚构学生",is_active:true}],"/patients":[{id:9,display_name:"虚构患者",patient_code:"P9"}],"/doctor/patient-grants":[]};
+  $("grantForm").reset=()=>{["grantStudent","grantNote","grantStart","grantEnd"].forEach(id=>{$(id).value="";});$("grantView").checked=true;$("grantPermanent").checked=false;$("grantEdit").checked=false;$("grantReview").checked=false;};
+  const responses={"/auth/me":{role,display_name:"虚构医生"},"/doctor/students":[{id:8,username:"fixture",display_name:"虚构学生",is_active:true}],"/doctor/student-permissions":[]};
   const sandbox={document:{getElementById:$,createElement:()=>new Element(),querySelectorAll:()=>[]},AppSession:{staffRole:()=>role,require:()=>"fixture-token",logout(){}},DoctorShell:{setUser(){}},Intl,Date,Option:function(text,value){this.textContent=text;this.value=value;},AppPaths:{fetch:async(path,options={})=>{calls.push({path,...options,body:options.body?JSON.parse(options.body):undefined});return {ok:true,json:async()=>responses[path]??{}};}}};
   vm.createContext(sandbox);vm.runInContext(source,sandbox);await settle();await settle();return {$,calls,responses};
 }
@@ -38,11 +38,11 @@ test("doctor cannot submit mismatched student passwords and successful creation 
   assert.equal($("studentPassword").value,"");assert.equal($("studentConfirm").value,"");assert.equal($("studentPassword").type,"password");assert.equal($("showPassword").attributes["aria-pressed"],"false");assert.equal($("studentDialog").open,false);
 });
 
-test("grant form carries patient scope, purpose, separate operations and timezone-aware times",async()=>{
-  const {$,calls}=await setup();await $("students").children[0].children[5].children[0].children[0].onclick();$("grantStudent").value="8";$("grantPatient").value="9";$("grantPurpose").value="虚构病例整理";$("grantEdit").checked=true;$("grantReview").checked=false;
+test("student permissions have no patient selector, optional note and timezone-aware period",async()=>{
+  const {$,calls}=await setup();await $("students").children[0].children[5].children[0].children[0].onclick();$("grantStudent").value="8";$("grantNote").value="";$("grantEdit").checked=true;$("grantReview").checked=false;
   await $("grantForm").onsubmit({preventDefault(){},target:$("grantForm")});
-  const request=calls.find(c=>c.method==="POST");assert.equal(request.path,"/doctor/patient-grants");
-  assert.equal(request.body.student_id,8);assert.equal(request.body.patient_id,9);assert.equal(request.body.can_edit,true);assert.equal(request.body.can_review,false);assert.equal(request.body.purpose,"虚构病例整理");assert.equal($("grantDialog").open,false);assert.ok(request.body.starts_at.endsWith("Z"));assert.ok(new Date(request.body.ends_at)>new Date(request.body.starts_at));
+  const request=calls.find(c=>c.method==="POST");assert.equal(request.path,"/doctor/student-permissions");
+  assert.equal(request.body.student_id,8);assert.ok(!Object.hasOwn(request.body,"patient_id"));assert.equal(request.body.can_view,true);assert.equal(request.body.can_edit,true);assert.equal(request.body.can_review,false);assert.equal(request.body.note,"");assert.equal($("grantDialog").open,false);assert.ok(request.body.starts_at.endsWith("Z"));assert.ok(new Date(request.body.ends_at)>new Date(request.body.starts_at));
 });
 
 test("student who directly visits team page cannot load doctor controls",async()=>{
@@ -50,8 +50,8 @@ test("student who directly visits team page cannot load doctor controls",async()
 });
 
 test("invalid grant date is rejected before a request is sent",async()=>{
-  const {$,calls}=await setup();await $("students").children[0].children[5].children[0].children[0].onclick();$("grantEnd").value="2020-01-01T12:00";
-  await $("grantForm").onsubmit({preventDefault(){},target:$("grantForm")});assert.ok(!calls.some(c=>c.method==="POST"));assert.match($("grantError").textContent,/结束时间/);assert.equal($("grantDialog").open,true);
+  const {$,calls}=await setup();await $("students").children[0].children[5].children[0].children[0].onclick();$("grantEnd").value="2020-01-01";
+  await $("grantForm").onsubmit({preventDefault(){},target:$("grantForm")});assert.ok(!calls.some(c=>c.method==="POST"));assert.match($("grantError").textContent,/截止日期/);assert.equal($("grantDialog").open,true);
 });
 
 
@@ -64,17 +64,42 @@ test("page starts with a student list and opens forms only through dialogs",asyn
   $("studentPassword").value="Unsaved-password";$("showPassword").onclick();$("studentDialog").close();
   assert.equal($("studentPassword").value,"");assert.equal($("studentPassword").type,"password");
   const assign=$("students").children[0].children[5].children[0].children[0];await assign.onclick();
-  assert.equal($("grantDialog").open,true);assert.equal($("grantStudent").value,"8");assert.match($("grantStudentName").textContent,/虚构学生/);
+  assert.equal($("grantDialog").open,true);assert.equal($("grantStudent").value,"8");assert.equal($("grantDialogTitle").textContent,"虚构学生的权限");
   assert.ok(!calls.some(c=>c.method==="POST"));
 });
 
 test("authorization history is scoped to the selected student and can switch to assignment",async()=>{
   const {$,responses}=await setup();
-  responses["/doctor/patient-grants"]=[
-    {id:51,student_id:8,patient_id:9,state:"active",purpose:"虚构用途",starts_at:new Date().toISOString(),ends_at:new Date(Date.now()+86400000).toISOString()},
-    {id:52,student_id:99,patient_id:9,state:"active",purpose:"另一个学生的记录",starts_at:new Date().toISOString(),ends_at:new Date(Date.now()+86400000).toISOString()},
+  responses["/doctor/student-permissions"]=[
+    {id:51,student_id:8,scope:"doctor",can_view:true,state:"active",note:"虚构用途",starts_at:new Date().toISOString(),ends_at:new Date(Date.now()+86400000).toISOString()},
+    {id:52,student_id:99,scope:"doctor",can_view:true,state:"active",note:"另一个学生的记录",starts_at:new Date().toISOString(),ends_at:new Date(Date.now()+86400000).toISOString()},
   ];
   const records=$("students").children[0].children[5].children[0].children[1];await records.onclick();
   assert.equal($("recordsDialog").open,true);assert.equal($("grants").children.length,1);
   $("grantFromRecords").onclick();assert.equal($("recordsDialog").open,false);assert.equal($("grantDialog").open,true);assert.equal($("grantStudent").value,"8");
+});
+
+
+test("permanent permission disables dates and submits null bounds",async()=>{
+  const {$,calls}=await setup();await $("students").children[0].children[5].children[0].children[0].onclick();
+  assert.equal($("grantView").checked,true);$("grantPermanent").checked=true;$("grantPermanent").onchange();
+  assert.equal($("grantPeriod").disabled,true);assert.equal($("grantStart").disabled,true);assert.equal($("grantEnd").disabled,true);assert.equal($("grantStart").required,false);
+  $("grantStart").value="";$("grantEnd").value="";
+  await $("grantForm").onsubmit({preventDefault(){}});
+  const request=calls.find(c=>c.method==="POST");assert.equal(request.body.is_permanent,true);assert.equal(request.body.starts_at,null);assert.equal(request.body.ends_at,null);
+});
+
+test("view can be unchecked and then edit/review are cleared and disabled",async()=>{
+  const {$,calls}=await setup();await $("students").children[0].children[5].children[0].children[0].onclick();
+  $("grantEdit").checked=true;$("grantReview").checked=true;$("grantView").checked=false;$("grantView").onchange();
+  for(const id of ["grantEdit","grantReview"]){assert.equal($(id).checked,false);assert.equal($(id).disabled,true);}
+  $("grantPermanent").checked=true;$("grantPermanent").onchange();await $("grantForm").onsubmit({preventDefault(){}});
+  const request=calls.find(c=>c.method==="POST");assert.equal(request.body.can_view,false);assert.equal(request.body.can_edit,false);assert.equal(request.body.can_review,false);
+});
+
+test("same-day date interval includes the entire selected end day",async()=>{
+  const {$,calls}=await setup();await $("students").children[0].children[5].children[0].children[0].onclick();
+  $("grantStart").value="2030-02-03";$("grantEnd").value="2030-02-03";
+  await $("grantForm").onsubmit({preventDefault(){}});
+  const request=calls.find(c=>c.method==="POST");assert.equal(request.body.starts_at,new Date("2030-02-03T00:00:00").toISOString());assert.equal(request.body.ends_at,new Date("2030-02-04T00:00:00").toISOString());
 });

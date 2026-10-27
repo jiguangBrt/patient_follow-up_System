@@ -42,3 +42,13 @@
   .password-row button { width:auto; }
   .team-dialog .dialog-error { margin:12px 20px 0; }
 }
+
+.grant-period-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:14px; }
+.grant-period-fields { display:flex; align-items:center; gap:8px; border:0; padding:0; margin:0; min-width:0; }
+.doctor-app .grant-period-fields input { flex:1; min-width:0; width:100%; padding:9px 7px; }
+.grant-period-fields:disabled input { background:#f0f3f5; color:#a2abb4; border-color:#e2e7ec; cursor:not-allowed; }
+.grant-period-fields:disabled { color:#a2abb4; }
+.team-dialog .permanent-option { display:flex; align-items:center; gap:6px; white-space:nowrap; font-weight:400; }
+.doctor-app .permanent-option input { width:16px; min-width:16px; height:16px; min-height:16px; padding:0; margin:0; }
+.doctor-app .grant-note { min-height:72px; width:100%; min-width:0; }
+@media(max-width:600px) { .grant-period-row { grid-template-columns:minmax(0,1fr); gap:12px; } }

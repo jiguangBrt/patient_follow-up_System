@@ -48,30 +48,35 @@ def team(request):
 
 
 def grant(team, **changes):
-    client, _, ids, doctor, _, student_id = team
+    client, _, _ids, doctor, _, student_id = team
     now = datetime.now(UTC)
     payload = {
         "student_id": student_id,
-        "patient_id": ids["patient_record"],
-        "purpose": "虚构病例整理",
+        "note": "虚构病例整理",
         "starts_at": (now - timedelta(minutes=1)).isoformat(),
         "ends_at": (now + timedelta(days=1)).isoformat(),
         **changes,
     }
-    return client.post("/doctor/patient-grants", headers=doctor, json=payload)
+    return client.post("/doctor/student-permissions", headers=doctor, json=payload)
 
 
 def test_team_login_resolves_database_role_and_rejects_other_identities(team):
     client, factory, ids, _, _, _ = team
     for username, expected_role in (("doctor", "doctor"), ("student_one", "student")):
-        response = client.post("/auth/login", json={"username": username, "password": PASSWORD, "role": "team"})
+        response = client.post(
+            "/auth/login",
+            json={"username": username, "password": PASSWORD, "role": "team"},
+        )
         assert response.status_code == 200, response.text
         headers = {"Authorization": "Bearer " + response.json()["access_token"]}
         assert client.get("/auth/me", headers=headers).json()["role"] == expected_role
     for username in ("admin", "patient"):
         with factory() as db:
             before = db.get(User, ids[username]).last_login_at
-        response = client.post("/auth/login", json={"username": username, "password": PASSWORD, "role": "team"})
+        response = client.post(
+            "/auth/login",
+            json={"username": username, "password": PASSWORD, "role": "team"},
+        )
         assert response.status_code == 403
         assert "access_token" not in response.json()
         with factory() as db:
@@ -367,19 +372,19 @@ def test_revocation_blocks_existing_token_lists_details_files_preview_and_writes
     )
     assert (
         client.post(
-            f"/doctor/patient-grants/{authorization['id']}/revoke",
+            f"/doctor/student-permissions/{authorization['id']}/revoke",
             headers=auth(client, "other_doctor"),
         ).status_code
         == 404
     )
     result = client.post(
-        f"/doctor/patient-grants/{authorization['id']}/revoke", headers=doctor
+        f"/doctor/student-permissions/{authorization['id']}/revoke", headers=doctor
     )
     assert result.status_code == 200 and result.json()["state"] == "revoked"
     assert result.json()["revoked_by_id"] == ids["doctor"]
     assert (
         client.post(
-            f"/doctor/patient-grants/{authorization['id']}/revoke", headers=doctor
+            f"/doctor/student-permissions/{authorization['id']}/revoke", headers=doctor
         ).json()["revoked_at"]
         == result.json()["revoked_at"]
     )
@@ -397,9 +402,9 @@ def test_revocation_blocks_existing_token_lists_details_files_preview_and_writes
     assert review(client, student, doc, []).status_code == 404
     with factory() as db:
         assert len(list(db.scalars(select(PatientGrant)))) == 1
-    assert client.get("/doctor/patient-grants", headers=student).status_code == 403
+    assert client.get("/doctor/student-permissions", headers=student).status_code == 403
     assert client.patch(
-        f"/doctor/patient-grants/{authorization['id']}",
+        f"/doctor/student-permissions/{authorization['id']}",
         headers=doctor,
         json={"can_review": True},
     ).status_code in (404, 405)
@@ -426,7 +431,7 @@ def test_expiry_scheduling_overlap_and_student_teacher_disable(team):
     assert client.get("/patients", headers=student).json() == []
     a = grant(team, can_edit=True).json()
     grant(team)
-    client.post(f"/doctor/patient-grants/{a['id']}/revoke", headers=doctor)
+    client.post(f"/doctor/student-permissions/{a['id']}/revoke", headers=doctor)
     assert client.get("/patients", headers=student).json()[0]["permissions"] == ["view"]
     client.patch(
         f"/doctor/students/{student_id}", headers=doctor, json={"is_active": False}
@@ -451,7 +456,7 @@ def test_expiry_scheduling_overlap_and_student_teacher_disable(team):
 @pytest.mark.parametrize(
     "change",
     [
-        {"purpose": "  "},
+        {"note": "x" * 301},
         {"ends_at": "2020-01-01T00:00:00Z"},
         {"starts_at": "2020-01-01T00:00:00"},
         {"can_export": True},
@@ -463,16 +468,15 @@ def test_invalid_grants_rejected(team, change):
 
 def test_cross_team_and_admin_cannot_grant_or_read_clinical_data(team):
     client, _, ids, doctor, student, student_id = team
-    assert grant(team, patient_id=ids["other_record"]).status_code == 404
+    assert grant(team, patient_id=ids["other_record"]).status_code == 422
     other = auth(client, "other_doctor")
     assert (
         client.post(
-            "/doctor/patient-grants",
+            "/doctor/student-permissions",
             headers=other,
             json={
                 "student_id": student_id,
-                "patient_id": ids["other_record"],
-                "purpose": "bad",
+                "note": "bad",
                 "starts_at": datetime.now(UTC).isoformat(),
                 "ends_at": (datetime.now(UTC) + timedelta(days=1)).isoformat(),
             },
@@ -489,7 +493,7 @@ def test_cross_team_and_admin_cannot_grant_or_read_clinical_data(team):
     ):
         assert client.get(path, headers=admin).status_code == 403
     assert client.post(
-        "/doctor/patient-grants", headers=student, json={}
+        "/doctor/student-permissions", headers=student, json={}
     ).status_code in (403, 422)
 
 
@@ -554,7 +558,7 @@ def test_patient_and_intake_originals_import_and_review_share_same_scope(
         f"/patient-documents/{original_id}/file",
     ]
     assert client.get("/intake-submissions", headers=student).json() == []
-    authorization = grant(team).json()
+    assert grant(team).status_code == 201
     assert len(client.get("/intake-submissions", headers=student).json()) == 1
     for path in paths:
         response = client.get(path, headers=student)
@@ -585,7 +589,7 @@ def test_patient_and_intake_originals_import_and_review_share_same_scope(
         ).status_code
         == 404
     )
-    edit = grant(team, can_edit=True).json()
+    assert grant(team, can_edit=True).status_code == 201
     imported = []
     for kind, source_id in (("intake", intake_id), ("patient", original_id)):
         response = client.post(
@@ -596,7 +600,7 @@ def test_patient_and_intake_originals_import_and_review_share_same_scope(
         assert response.status_code == 200, response.text
         imported.append(response.json()["id"])
         assert response.json()["target_patient_id"] == ids["patient_record"]
-    client.post(f"/doctor/patient-grants/{edit['id']}/revoke", headers=doctor)
+    read_only = grant(team).json()
     # Read-only users can open an existing import without creating/mutating it.
     assert (
         client.post(
@@ -606,7 +610,7 @@ def test_patient_and_intake_originals_import_and_review_share_same_scope(
         ).status_code
         == 200
     )
-    client.post(f"/doctor/patient-grants/{authorization['id']}/revoke", headers=doctor)
+    client.post(f"/doctor/student-permissions/{read_only['id']}/revoke", headers=doctor)
     for path in paths + [f"/clinical-documents/{i}/file" for i in imported]:
         assert client.get(path, headers=student).status_code == 404
 
@@ -635,3 +639,143 @@ def test_revoked_while_ocr_runs_discards_result(team, monkeypatch):
     )
     with factory() as db:
         assert db.get(ClinicalDocument, doc["id"]).extraction_status == "not_run"
+
+
+def test_permanent_permissions_cover_all_current_and_future_patients_only_of_mentor(
+    team,
+):
+    client, _, ids, doctor, student, _ = team
+    first = client.post(
+        "/patients", headers=doctor, json={"display_name": "同一医生的第二名虚构患者"}
+    ).json()
+    response = grant(team, is_permanent=True, note="")
+    assert response.status_code == 201, response.text
+    data = response.json()
+    assert data["patient_id"] is None and data["scope"] == "doctor"
+    assert (
+        data["is_permanent"] and data["starts_at"] is None and data["ends_at"] is None
+    )
+    assert data["can_view"] and data["note"] == ""
+    later = client.post(
+        "/patients", headers=doctor, json={"display_name": "授权后新增的虚构患者"}
+    ).json()
+    assert {p["id"] for p in client.get("/patients", headers=student).json()} == {
+        ids["patient_record"],
+        first["id"],
+        later["id"],
+    }
+    assert (
+        client.get(f"/patients/{later['id']}/workspace", headers=student).status_code
+        == 200
+    )
+    assert (
+        client.get(
+            f"/patients/{ids['other_record']}/workspace", headers=student
+        ).status_code
+        == 404
+    )
+    assert (
+        client.post(
+            f"/doctor/student-permissions/{data['id']}/revoke", headers=doctor
+        ).status_code
+        == 200
+    )
+    assert client.get("/patients", headers=student).json() == []
+
+
+def test_new_settings_replace_old_rights_and_allow_view_to_be_disabled(team):
+    client, factory, ids, doctor, student, student_id = team
+    broad = grant(team, is_permanent=True, can_edit=True, can_review=True).json()
+    doc = student_upload(team).json()
+    smaller = grant(team, is_permanent=True, note="  可选备注  ").json()
+    assert smaller["note"] == "可选备注"
+    assert client.get("/patients", headers=student).json()[0]["permissions"] == ["view"]
+    assert (
+        review(
+            client, student, doc, [field("chief_complaint", "越权草稿", "pending")]
+        ).status_code
+        == 404
+    )
+    history = client.get("/doctor/student-permissions", headers=doctor).json()
+    previous = next(g for g in history if g["id"] == broad["id"])
+    assert previous["state"] == "revoked" and previous["revoked_by_id"] == ids["doctor"]
+    closed = grant(team, is_permanent=True, can_view=False).json()
+    assert not closed["can_view"]
+    assert client.get("/patients", headers=student).json() == []
+    assert (
+        client.get(f"/clinical-documents/{doc['id']}/file", headers=student).status_code
+        == 404
+    )
+    assert (
+        grant(team, is_permanent=True, can_view=False, can_edit=True).status_code == 422
+    )
+    with factory() as db:
+        active = list(
+            db.scalars(
+                select(PatientGrant).where(
+                    PatientGrant.student_id == student_id,
+                    PatientGrant.revoked_at.is_(None),
+                )
+            )
+        )
+        assert len(active) == 1 and active[0].id == closed["id"]
+
+
+def test_legacy_patient_grants_stay_scoped_until_doctor_saves_new_settings(team):
+    client, factory, ids, doctor, student, student_id = team
+    second = client.post(
+        "/patients", headers=doctor, json={"display_name": "旧授权未覆盖的虚构患者"}
+    ).json()
+    with factory() as db:
+        legacy = PatientGrant(
+            patient_id=ids["patient_record"],
+            student_id=student_id,
+            granted_by_id=ids["doctor"],
+            purpose="历史用途",
+            can_edit=False,
+            can_review=False,
+            starts_at=datetime.now(UTC) - timedelta(days=1),
+            ends_at=datetime.now(UTC) + timedelta(days=1),
+        )
+        db.add(legacy)
+        db.commit()
+        legacy_id = legacy.id
+    assert [p["id"] for p in client.get("/patients", headers=student).json()] == [
+        ids["patient_record"]
+    ]
+    assert grant(team, is_permanent=True).status_code == 201
+    assert {p["id"] for p in client.get("/patients", headers=student).json()} == {
+        ids["patient_record"],
+        second["id"],
+    }
+    with factory() as db:
+        old = db.get(PatientGrant, legacy_id)
+        assert (
+            old.patient_id == ids["patient_record"]
+            and old.purpose == "历史用途"
+            and old.revoked_at is not None
+        )
+
+
+def test_parallel_settings_updates_leave_one_configuration(team):
+    from concurrent.futures import ThreadPoolExecutor
+
+    client, factory, _, doctor, _, student_id = team
+
+    def save(edit):
+        return client.post(
+            "/doctor/student-permissions",
+            headers=doctor,
+            json={"student_id": student_id, "is_permanent": True, "can_edit": edit},
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(save, [True, False]))
+    assert all(r.status_code == 201 for r in results)
+    with factory() as db:
+        records = list(
+            db.scalars(
+                select(PatientGrant).where(PatientGrant.student_id == student_id)
+            )
+        )
+        assert len(records) == 2 and sum(g.revoked_at is None for g in records) == 1
