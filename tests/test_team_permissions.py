@@ -356,7 +356,9 @@ def test_explicit_review_grant_can_file_but_cannot_create_patient_or_rebind(team
     assert len(records) == 1
 
 
-def test_revocation_blocks_existing_token_lists_details_files_preview_and_writes(team):
+def test_disabling_view_blocks_existing_token_lists_details_files_preview_and_writes(
+    team,
+):
     client, factory, ids, doctor, student, _ = team
     authorization = grant(team, can_edit=True, can_review=True).json()
     doc = student_upload(team).json()
@@ -370,23 +372,16 @@ def test_revocation_blocks_existing_token_lists_details_files_preview_and_writes
         ).status_code
         == 200
     )
-    assert (
-        client.post(
-            f"/doctor/student-permissions/{authorization['id']}/revoke",
-            headers=auth(client, "other_doctor"),
-        ).status_code
-        == 404
-    )
-    result = client.post(
-        f"/doctor/student-permissions/{authorization['id']}/revoke", headers=doctor
-    )
-    assert result.status_code == 200 and result.json()["state"] == "revoked"
-    assert result.json()["revoked_by_id"] == ids["doctor"]
+    result = grant(team, is_permanent=True, can_view=False)
+    assert result.status_code == 201 and not result.json()["can_view"]
+    assert result.json()["id"] == authorization["id"]
+    assert "revoked_at" not in result.json() and "revoked_by_id" not in result.json()
+    assert client.get("/doctor/patient-grants", headers=doctor).status_code == 404
     assert (
         client.post(
             f"/doctor/student-permissions/{authorization['id']}/revoke", headers=doctor
-        ).json()["revoked_at"]
-        == result.json()["revoked_at"]
+        ).status_code
+        == 404
     )
     assert client.get("/patients", headers=student).json() == []
     assert client.get("/clinical-documents", headers=student).json() == []
@@ -429,9 +424,8 @@ def test_expiry_scheduling_overlap_and_student_teacher_disable(team):
         ) - timedelta(seconds=1)
         db.commit()
     assert client.get("/patients", headers=student).json() == []
-    a = grant(team, can_edit=True).json()
+    grant(team, can_edit=True)
     grant(team)
-    client.post(f"/doctor/student-permissions/{a['id']}/revoke", headers=doctor)
     assert client.get("/patients", headers=student).json()[0]["permissions"] == ["view"]
     client.patch(
         f"/doctor/students/{student_id}", headers=doctor, json={"is_active": False}
@@ -500,7 +494,7 @@ def test_cross_team_and_admin_cannot_grant_or_read_clinical_data(team):
 def test_patient_and_intake_originals_import_and_review_share_same_scope(
     team, tmp_path, monkeypatch
 ):
-    client, factory, ids, doctor, student, _ = team
+    client, factory, ids, _doctor, student, _ = team
     monkeypatch.setenv("PATIENT_UPLOAD_DIR", str(tmp_path))
     monkeypatch.setenv("INTAKE_UPLOAD_DIR", str(tmp_path))
     (tmp_path / "original.png").write_bytes(png_bytes())
@@ -600,7 +594,7 @@ def test_patient_and_intake_originals_import_and_review_share_same_scope(
         assert response.status_code == 200, response.text
         imported.append(response.json()["id"])
         assert response.json()["target_patient_id"] == ids["patient_record"]
-    read_only = grant(team).json()
+    grant(team)
     # Read-only users can open an existing import without creating/mutating it.
     assert (
         client.post(
@@ -610,7 +604,7 @@ def test_patient_and_intake_originals_import_and_review_share_same_scope(
         ).status_code
         == 200
     )
-    client.post(f"/doctor/student-permissions/{read_only['id']}/revoke", headers=doctor)
+    grant(team, is_permanent=True, can_view=False)
     for path in paths + [f"/clinical-documents/{i}/file" for i in imported]:
         assert client.get(path, headers=student).status_code == 404
 
@@ -622,9 +616,8 @@ def test_revoked_while_ocr_runs_discards_result(team, monkeypatch):
 
     def recognize(*_):
         with factory() as db:
-            db.get(PatientGrant, authorization["id"]).revoked_at = datetime.now(
-                UTC
-            ).replace(tzinfo=None)
+            config = db.get(PatientGrant, authorization["id"])
+            config.can_view = config.can_edit = config.can_review = False
             db.commit()
         return ocr_result("虚构甲")
 
@@ -674,17 +667,12 @@ def test_permanent_permissions_cover_all_current_and_future_patients_only_of_men
         ).status_code
         == 404
     )
-    assert (
-        client.post(
-            f"/doctor/student-permissions/{data['id']}/revoke", headers=doctor
-        ).status_code
-        == 200
-    )
+    assert grant(team, is_permanent=True, can_view=False).status_code == 201
     assert client.get("/patients", headers=student).json() == []
 
 
 def test_new_settings_replace_old_rights_and_allow_view_to_be_disabled(team):
-    client, factory, ids, doctor, student, student_id = team
+    client, factory, _ids, doctor, student, student_id = team
     broad = grant(team, is_permanent=True, can_edit=True, can_review=True).json()
     doc = student_upload(team).json()
     smaller = grant(team, is_permanent=True, note="  可选备注  ").json()
@@ -696,9 +684,9 @@ def test_new_settings_replace_old_rights_and_allow_view_to_be_disabled(team):
         ).status_code
         == 404
     )
-    history = client.get("/doctor/student-permissions", headers=doctor).json()
-    previous = next(g for g in history if g["id"] == broad["id"])
-    assert previous["state"] == "revoked" and previous["revoked_by_id"] == ids["doctor"]
+    configs = client.get("/doctor/student-permissions", headers=doctor).json()
+    assert len(configs) == 1 and configs[0]["id"] == broad["id"] == smaller["id"]
+    assert configs[0]["can_review"] is False
     closed = grant(team, is_permanent=True, can_view=False).json()
     assert not closed["can_view"]
     assert client.get("/patients", headers=student).json() == []
@@ -714,7 +702,6 @@ def test_new_settings_replace_old_rights_and_allow_view_to_be_disabled(team):
             db.scalars(
                 select(PatientGrant).where(
                     PatientGrant.student_id == student_id,
-                    PatientGrant.revoked_at.is_(None),
                 )
             )
         )
@@ -749,12 +736,9 @@ def test_legacy_patient_grants_stay_scoped_until_doctor_saves_new_settings(team)
         second["id"],
     }
     with factory() as db:
-        old = db.get(PatientGrant, legacy_id)
-        assert (
-            old.patient_id == ids["patient_record"]
-            and old.purpose == "历史用途"
-            and old.revoked_at is not None
-        )
+        current = db.get(PatientGrant, legacy_id)
+        assert current.patient_id is None and current.purpose == "虚构病例整理"
+        assert len(list(db.scalars(select(PatientGrant)))) == 1
 
 
 def test_parallel_settings_updates_leave_one_configuration(team):
@@ -778,4 +762,4 @@ def test_parallel_settings_updates_leave_one_configuration(team):
                 select(PatientGrant).where(PatientGrant.student_id == student_id)
             )
         )
-        assert len(records) == 2 and sum(g.revoked_at is None for g in records) == 1
+        assert len(records) == 1

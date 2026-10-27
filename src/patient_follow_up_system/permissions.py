@@ -27,7 +27,6 @@ def patient_scope(user: User, operation: str = "view"):
     grants = select(PatientGrant.id).where(
         PatientGrant.student_id == user.id,
         PatientGrant.granted_by_id == user.mentor_doctor_id,
-        PatientGrant.revoked_at.is_(None),
         PatientGrant.can_view.is_(True),
         or_(PatientGrant.starts_at.is_(None), PatientGrant.starts_at <= now),
         or_(PatientGrant.ends_at.is_(None), PatientGrant.ends_at > now),

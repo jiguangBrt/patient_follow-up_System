@@ -1,11 +1,11 @@
-"""Doctors manage their own students and dated patient grants."""
+"""Doctors manage their own students and current permission settings."""
 
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -89,10 +89,9 @@ def grant_info(grant):
             "can_view",
             "can_edit",
             "can_review",
-            "revoked_by_id",
         )
     }
-    for key in ("starts_at", "ends_at", "created_at", "revoked_at"):
+    for key in ("starts_at", "ends_at", "created_at"):
         value = getattr(grant, key)
         data[key] = value.replace(tzinfo=UTC) if value else None
     data["note"] = grant.purpose
@@ -100,9 +99,7 @@ def grant_info(grant):
     data["scope"] = "doctor" if grant.patient_id is None else "patient"
     now = datetime.now(UTC).replace(tzinfo=None)
     data["state"] = (
-        "revoked"
-        if grant.revoked_at
-        else "expired"
+        "expired"
         if grant.ends_at is not None and grant.ends_at <= now
         else "scheduled"
         if grant.starts_at is not None and grant.starts_at > now
@@ -164,7 +161,6 @@ def student_status(student_id: int, request: AccountStatus, db: DB, doctor: Doct
     return account_info(student)
 
 
-@router.get("/doctor/patient-grants", include_in_schema=False)
 @router.get("/doctor/student-permissions")
 def grants(db: DB, doctor: Doctor):
     return [
@@ -179,8 +175,8 @@ def grants(db: DB, doctor: Doctor):
 
 @router.post("/doctor/student-permissions", status_code=201)
 def grant_student(request: GrantCreate, db: DB, doctor: Doctor):
-    # Serialize settings updates on this student before reading/replacing grants.
-    # This prevents parallel saves from leaving two configurations active.
+    # Serialize settings updates before reading or updating the current configuration.
+    # This prevents parallel saves from creating duplicate configurations.
     db.execute(
         update(User)
         .where(
@@ -193,39 +189,34 @@ def grant_student(request: GrantCreate, db: DB, doctor: Doctor):
     student = own_student(db, doctor, request.student_id)
     if not student.is_active:
         raise HTTPException(422, "请先启用学生账号。")
-    now = datetime.now(UTC).replace(tzinfo=None)
-    db.execute(
-        update(PatientGrant)
+    current = db.scalar(
+        select(PatientGrant)
         .where(
             PatientGrant.student_id == student.id,
             PatientGrant.granted_by_id == doctor.id,
-            PatientGrant.revoked_at.is_(None),
         )
-        .values(revoked_at=now, revoked_by_id=doctor.id)
+        .order_by(PatientGrant.id.desc())
+        .limit(1)
     )
-    grant = PatientGrant(
-        **request.model_dump(exclude={"note", "is_permanent"}),
-        patient_id=None,
-        purpose=request.note,
-        granted_by_id=doctor.id,
-    )
-    db.add(grant)
+    values = request.model_dump(exclude={"note", "is_permanent"}) | {
+        "patient_id": None,
+        "purpose": request.note,
+        "granted_by_id": doctor.id,
+    }
+    if current is None:
+        current = PatientGrant(**values)
+        db.add(current)
+    else:
+        for key, value in values.items():
+            setattr(current, key, value)
+        # Old patient-scoped settings may contain several current rows. An explicit
+        # save replaces those scopes with the single requested doctor-wide setting.
+        db.execute(
+            delete(PatientGrant).where(
+                PatientGrant.student_id == student.id,
+                PatientGrant.granted_by_id == doctor.id,
+                PatientGrant.id != current.id,
+            )
+        )
     db.commit()
-    return grant_info(grant)
-
-
-@router.post("/doctor/patient-grants/{grant_id}/revoke", include_in_schema=False)
-@router.post("/doctor/student-permissions/{grant_id}/revoke")
-def revoke(grant_id: int, db: DB, doctor: Doctor):
-    grant = db.scalar(
-        select(PatientGrant).where(
-            PatientGrant.id == grant_id, PatientGrant.granted_by_id == doctor.id
-        )
-    )
-    if not grant:
-        raise HTTPException(404, "授权记录不存在。")
-    if grant.revoked_at is None:
-        grant.revoked_at = datetime.now(UTC).replace(tzinfo=None)
-        grant.revoked_by_id = doctor.id
-        db.commit()
-    return grant_info(grant)
+    return grant_info(current)

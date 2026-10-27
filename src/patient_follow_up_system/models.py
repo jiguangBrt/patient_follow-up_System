@@ -77,7 +77,7 @@ class User(Base):
 
 
 class PatientGrant(Base):
-    """Append-only authorization history; change permissions by revoking and regranting."""
+    """Current student settings; patient_id only preserves legacy limited scopes."""
 
     __tablename__ = "patient_grants"
     __table_args__ = (
@@ -94,8 +94,6 @@ class PatientGrant(Base):
     can_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    revoked_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp())
 
 
