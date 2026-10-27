@@ -1,31 +1,50 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学生与权限 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261027-team-1"><link rel="stylesheet" href="/static/admin.css?v=20261027-team-1"><link rel="stylesheet" href="/static/team.css?v=20261027-team-1"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学生与权限 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261027-team-1"><link rel="stylesheet" href="/static/admin.css?v=20261027-team-1"><link rel="stylesheet" href="/static/team.css?v=20261027-team-2"></head>
 <body class="doctor-app signed-in">
 <aside id="doctorSidebar" class="doctor-sidebar"></aside>
 <main class="doctor-main">
-  <div class="workspace-topbar"><div><p class="breadcrumb">设置 / 学生与权限</p><h1>学生与权限</h1></div><span class="trial-tag">医生管理自己的学生与患者授权</span></div>
-  <p id="message" class="status" role="status" aria-live="polite">正在加载…</p>
-  <div id="teamContent" class="hidden">
-    <section class="card"><div class="toolbar"><div><h2>我的学生</h2><p class="muted">新账号默认不能查看患者。停用账号后，已有登录也无法继续请求资料。</p></div><button id="refreshTeam" class="secondary">刷新</button></div><div class="account-table-wrap"><table class="account-table"><thead><tr><th>姓名</th><th>账号</th><th>状态</th><th>上次登录（北京时间）</th><th>操作</th></tr></thead><tbody id="students"></tbody></table></div></section>
-    <section class="card"><h2>开通学生账号</h2><form id="studentForm" class="form-grid admin-account-form">
+  <div class="workspace-topbar"><div><p class="breadcrumb">设置 / 学生与权限</p><h1>学生与权限</h1></div></div>
+  <p id="message" class="status hidden" role="status" aria-live="polite"></p>
+  <section id="teamContent" class="card hidden" aria-label="学生列表">
+    <div class="toolbar team-toolbar"><div><h2>学生列表 <span id="studentCount" class="muted"></span></h2><p class="muted">管理学生账号与患者访问权限</p></div><div class="row"><button id="refreshTeam" type="button" class="secondary">刷新</button><button id="newStudent" type="button" aria-haspopup="dialog" aria-controls="studentDialog">＋ 新增学生</button></div></div>
+    <div class="account-table-wrap"><table class="account-table"><thead><tr><th scope="col">姓名</th><th scope="col">账号</th><th scope="col">状态</th><th scope="col">已授权患者</th><th scope="col">上次登录（北京时间）</th><th scope="col">操作</th></tr></thead><tbody id="students"></tbody></table></div>
+  </section>
+</main>
+<dialog id="studentDialog" class="team-dialog" aria-labelledby="studentDialogTitle">
+  <header class="team-dialog-header"><div><h2 id="studentDialogTitle">新增学生</h2><p class="muted">开通账号后，可继续为学生分配患者权限。</p></div><button type="button" data-close="studentDialog" class="dialog-close" aria-label="关闭新增学生">×</button></header>
+  <p id="studentError" class="status error hidden dialog-error" role="alert"></p>
+  <form id="studentForm" class="team-dialog-form">
+    <div class="team-dialog-body form-grid">
       <label for="studentUsername">登录账号</label><input id="studentUsername" pattern="[A-Za-z0-9_][A-Za-z0-9_.-]{2,49}" maxlength="50" autocomplete="off" required placeholder="3–50 位字母、数字或 _ . -">
-      <label for="studentName">学生姓名</label><input id="studentName" maxlength="100" required>
-      <label for="studentPassword">初始密码</label><div class="row"><input id="studentPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button id="showPassword" type="button" class="secondary" aria-pressed="false">显示密码</button></div>
-      <label for="studentConfirm">确认初始密码</label><div class="row"><input id="studentConfirm" type="password" minlength="8" maxlength="128" autocomplete="new-password" required><button id="showConfirm" type="button" class="secondary" aria-pressed="false">显示密码</button></div>
-      <div class="row full-row"><button type="submit">开通学生账号</button></div>
-    </form></section>
-    <section class="card"><h2>分配患者权限</h2><p class="muted">每条授权都包含查看权限；录入允许上传、OCR 和暂存草稿；审核允许确认入档及批准/驳回。多条有效授权的权限合并，撤销时需检查所有有效记录。学生不能新建患者、管理二维码或再次授权。队列与资料导出尚未开放。</p>
-    <form id="grantForm" class="form-grid admin-account-form">
-      <label for="grantStudent">学生</label><select id="grantStudent" required></select>
+      <label for="studentName">学生姓名</label><input id="studentName" maxlength="100" required placeholder="请输入学生姓名">
+      <label for="studentPassword">初始密码</label><div class="password-row"><input id="studentPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" required placeholder="至少 8 位"><button id="showPassword" type="button" class="secondary" aria-pressed="false">显示密码</button></div>
+      <label for="studentConfirm">确认密码</label><div class="password-row"><input id="studentConfirm" type="password" minlength="8" maxlength="128" autocomplete="new-password" required placeholder="再次输入初始密码"><button id="showConfirm" type="button" class="secondary" aria-pressed="false">显示密码</button></div>
+    </div>
+    <footer class="team-dialog-footer"><button type="button" class="secondary" data-close="studentDialog">取消</button><button id="createStudentButton" type="submit">开通账号</button></footer>
+  </form>
+</dialog>
+<dialog id="grantDialog" class="team-dialog" aria-labelledby="grantDialogTitle">
+  <header class="team-dialog-header"><div><h2 id="grantDialogTitle">分配患者权限</h2><p id="grantStudentName" class="muted"></p></div><button type="button" data-close="grantDialog" class="dialog-close" aria-label="关闭分配权限">×</button></header>
+  <p id="grantError" class="status error hidden dialog-error" role="alert"></p>
+  <form id="grantForm" class="team-dialog-form">
+    <input id="grantStudent" type="hidden">
+    <div class="team-dialog-body form-grid">
       <label for="grantPatient">患者</label><select id="grantPatient" required></select>
-      <label for="grantPurpose">工作用途</label><input id="grantPurpose" required maxlength="300" placeholder="例如：虚构胃炎病例整理">
-      <label for="grantStart">开始时间（本机时区）</label><input id="grantStart" type="datetime-local" required>
-      <label for="grantEnd">结束时间（本机时区）</label><input id="grantEnd" type="datetime-local" required>
-      <span>操作权限</span><div class="grant-checkboxes"><span>查看（必选）</span><label><input id="grantEdit" type="checkbox">录入 / OCR / 暂存</label><label><input id="grantReview" type="checkbox">审核 / 确认入档 / 驳回</label></div>
-      <div class="row full-row"><button type="submit">授予权限</button></div>
-    </form></section>
-    <section class="card"><h2>授权与撤销记录</h2><p class="muted">变更权限时先撤销原授权，再新增授权，历史记录会保留。</p><div class="account-table-wrap"><table class="account-table"><thead><tr><th>学生 / 患者</th><th>权限与用途</th><th>有效期（北京时间）</th><th>状态 / 撤销记录</th><th>操作</th></tr></thead><tbody id="grants"></tbody></table></div></section>
-  </div>
-</main><script src="/static/session.js?v=20261027-team-1"></script><script src="/static/doctor-shell.js?v=20261027-team-1"></script><script src="/static/team.js?v=20261027-team-1"></script>
+      <label for="grantPurpose">工作用途</label><input id="grantPurpose" required maxlength="300" placeholder="例如：胃炎病例整理">
+      <label for="grantStart">开始时间</label><input id="grantStart" type="datetime-local" required>
+      <label for="grantEnd">结束时间</label><input id="grantEnd" type="datetime-local" required>
+      <span class="field-label">操作权限</span><div class="grant-checkboxes"><span>查看（默认包含）</span><label><input id="grantEdit" type="checkbox">录入、OCR 与暂存</label><label><input id="grantReview" type="checkbox">审核、确认入档与驳回</label></div>
+      <p class="muted full-row">时间按本机时区填写。多条有效授权合并生效，变更权限请先撤销原授权。</p>
+    </div>
+    <footer class="team-dialog-footer"><button type="button" class="secondary" data-close="grantDialog">取消</button><button id="createGrantButton" type="submit">授予权限</button></footer>
+  </form>
+</dialog>
+<dialog id="recordsDialog" class="team-dialog records-dialog" aria-labelledby="recordsDialogTitle">
+  <header class="team-dialog-header"><div><h2 id="recordsDialogTitle">授权记录</h2><p class="muted">查看患者授权，保留到期及撤销历史。</p></div><button type="button" data-close="recordsDialog" class="dialog-close" aria-label="关闭授权记录">×</button></header>
+  <p id="recordsError" class="status error hidden dialog-error" role="alert"></p>
+  <div class="team-dialog-body account-table-wrap"><table class="account-table"><thead><tr><th scope="col">患者</th><th scope="col">权限与用途</th><th scope="col">有效期（北京时间）</th><th scope="col">状态 / 撤销记录</th><th scope="col">操作</th></tr></thead><tbody id="grants"></tbody></table></div>
+  <footer class="team-dialog-footer"><button type="button" class="secondary" data-close="recordsDialog">关闭</button><button id="grantFromRecords" type="button">分配权限</button></footer>
+</dialog>
+<script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261027-team-1"></script><script src="/static/team.js?v=20261027-team-2"></script>
 </body></html>

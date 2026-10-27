@@ -24,6 +24,7 @@ from patient_follow_up_system.models import (
     PatientIntakeLink,
     PatientIntakeSubmission,
     PatientNoticeVersion,
+    User,
 )
 
 
@@ -58,6 +59,23 @@ def grant(team, **changes):
         **changes,
     }
     return client.post("/doctor/patient-grants", headers=doctor, json=payload)
+
+
+def test_team_login_resolves_database_role_and_rejects_other_identities(team):
+    client, factory, ids, _, _, _ = team
+    for username, expected_role in (("doctor", "doctor"), ("student_one", "student")):
+        response = client.post("/auth/login", json={"username": username, "password": PASSWORD, "role": "team"})
+        assert response.status_code == 200, response.text
+        headers = {"Authorization": "Bearer " + response.json()["access_token"]}
+        assert client.get("/auth/me", headers=headers).json()["role"] == expected_role
+    for username in ("admin", "patient"):
+        with factory() as db:
+            before = db.get(User, ids[username]).last_login_at
+        response = client.post("/auth/login", json={"username": username, "password": PASSWORD, "role": "team"})
+        assert response.status_code == 403
+        assert "access_token" not in response.json()
+        with factory() as db:
+            assert db.get(User, ids[username]).last_login_at == before
 
 
 def student_upload(team):

@@ -5,7 +5,7 @@ import os
 import secrets
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request, status
@@ -95,7 +95,7 @@ class ChatResponse(BaseModel):
 class LoginRequest(BaseModel):
     username: str = Field(min_length=1, max_length=50)
     password: str = Field(min_length=1, max_length=128)
-    role: UserRole | None = None
+    role: UserRole | Literal["team"] | None = None
 
 
 class TokenResponse(BaseModel):
@@ -641,11 +641,12 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if request.role is not None and user.role != request.role:
+    matches_entry = user.role in (UserRole.DOCTOR, UserRole.STUDENT) if request.role == "team" else user.role == request.role
+    if request.role is not None and not matches_entry:
         role_name = {
             UserRole.PATIENT: "患者",
-            UserRole.DOCTOR: "医生",
-            UserRole.STUDENT: "学生",
+            UserRole.DOCTOR: "医生团队",
+            UserRole.STUDENT: "医生团队",
             UserRole.ADMIN: "管理员",
         }[user.role]
         raise HTTPException(
