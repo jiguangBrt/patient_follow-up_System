@@ -1314,7 +1314,7 @@ def read_intake_document(
     path = Path(os.getenv("INTAKE_UPLOAD_DIR", ".local/intake_uploads")) / submission.document_storage_name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="原始文件当前不可用，请联系管理员检查文件存储。")
-    return FileResponse(path, media_type=submission.document_mime_type, filename=submission.document_name)
+    return FileResponse(path, media_type=submission.document_mime_type, filename=submission.document_name, headers={"Cache-Control": "no-store"})
 
 
 @app.post("/intake-submissions/{submission_id}/review", response_model=IntakeSubmissionResponse)
@@ -1455,7 +1455,7 @@ def read_patient_document_file(
     path = patient_upload_root() / document.storage_name
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Document file is unavailable.")
-    return FileResponse(path, media_type=document.mime_type, filename=document.original_name)
+    return FileResponse(path, media_type=document.mime_type, filename=document.original_name, headers={"Cache-Control": "no-store"})
 
 
 @app.post(

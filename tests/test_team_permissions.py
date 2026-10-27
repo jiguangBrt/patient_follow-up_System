@@ -539,7 +539,9 @@ def test_patient_and_intake_originals_import_and_review_share_same_scope(
     authorization = grant(team).json()
     assert len(client.get("/intake-submissions", headers=student).json()) == 1
     for path in paths:
-        assert client.get(path, headers=student).content == png_bytes()
+        response = client.get(path, headers=student)
+        assert response.content == png_bytes()
+        assert response.headers["cache-control"] == "no-store"
     for kind, source_id in (("intake", intake_id), ("patient", original_id)):
         assert (
             client.post(
