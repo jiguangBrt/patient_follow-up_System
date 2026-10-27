@@ -58,7 +58,7 @@ test("invalid grant date is rejected before a request is sent",async()=>{
 test("page starts with a student list and opens forms only through dialogs",async()=>{
   const {$,calls}=await setup();
   assert.equal($("students").children.length,1);
-  for(const id of ["studentDialog","grantDialog","recordsDialog"])assert.equal($(id).open,false);
+  for(const id of ["studentDialog","grantDialog"])assert.equal($(id).open,false);
   assert.equal($("message").className,"hidden");
   $("newStudent").onclick();assert.equal($("studentDialog").open,true);assert.ok($("studentUsername").focused);
   $("studentPassword").value="Unsaved-password";$("showPassword").onclick();$("studentDialog").close();
@@ -68,15 +68,18 @@ test("page starts with a student list and opens forms only through dialogs",asyn
   assert.ok(!calls.some(c=>c.method==="POST"));
 });
 
-test("authorization history is scoped to the selected student and can switch to assignment",async()=>{
+test("student row offers settings without history and reloads existing configuration",async()=>{
   const {$,responses}=await setup();
   responses["/doctor/student-permissions"]=[
-    {id:51,student_id:8,scope:"doctor",can_view:true,state:"active",note:"虚构用途",starts_at:new Date().toISOString(),ends_at:new Date(Date.now()+86400000).toISOString()},
-    {id:52,student_id:99,scope:"doctor",can_view:true,state:"active",note:"另一个学生的记录",starts_at:new Date().toISOString(),ends_at:new Date(Date.now()+86400000).toISOString()},
+    {id:51,student_id:8,scope:"doctor",can_view:true,can_edit:true,can_review:false,is_permanent:true,state:"active",note:"保留的备注",starts_at:null,ends_at:null},
+    {id:52,student_id:99,scope:"doctor",can_view:true,can_review:true,is_permanent:true,state:"active",note:"其他学生配置",starts_at:null,ends_at:null},
   ];
-  const records=$("students").children[0].children[5].children[0].children[1];await records.onclick();
-  assert.equal($("recordsDialog").open,true);assert.equal($("grants").children.length,1);
-  $("grantFromRecords").onclick();assert.equal($("recordsDialog").open,false);assert.equal($("grantDialog").open,true);assert.equal($("grantStudent").value,"8");
+  await $("refreshTeam").onclick();
+  const actions=$("students").children[0].children[5].children[0].children;
+  assert.deepEqual(actions.map(button=>button.textContent),["设置权限","停用"]);
+  await actions[0].onclick();
+  assert.equal($("grantDialog").open,true);assert.equal($("grantStudent").value,"8");
+  assert.equal($("grantNote").value,"保留的备注");assert.equal($("grantPermanent").checked,true);assert.equal($("grantEdit").checked,true);assert.equal($("grantReview").checked,false);
 });
 
 

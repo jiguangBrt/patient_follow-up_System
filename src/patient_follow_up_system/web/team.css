@@ -24,10 +24,6 @@
 .grant-checkboxes { display:flex; flex-direction:column; gap:12px; font-size:13px; }
 .grant-checkboxes label { display:flex; align-items:center; gap:8px; font-weight:400; }
 .doctor-app .grant-checkboxes input { width:16px; min-width:16px; height:16px; min-height:16px; padding:0; margin:0; flex:0 0 16px; }
-.records-dialog { width:min(1060px,calc(100vw - 32px)); }
-.records-dialog .team-dialog-body { padding:8px 28px 20px; }
-.records-dialog td { white-space:pre-line; vertical-align:top; }
-.records-dialog .team-dialog-body { flex:1; }
 @media(max-width:600px) {
   .team-toolbar { align-items:flex-start; flex-direction:column; }
   .team-toolbar .row { width:100%; }

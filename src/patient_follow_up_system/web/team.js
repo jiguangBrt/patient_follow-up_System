@@ -1,8 +1,8 @@
 (() => {
   const $ = id => document.getElementById(id);
   const role = AppSession.staffRole(), token = AppSession.require(role);
-  const dialogIds = ["studentDialog", "grantDialog", "recordsDialog"];
-  let students = [], grants = [], recordsStudentId = null;
+  const dialogIds = ["studentDialog", "grantDialog"];
+  let students = [], grants = [];
   let creatingStudent = false, creatingGrant = false;
   const format = new Intl.DateTimeFormat("zh-CN", {timeZone:"Asia/Shanghai",dateStyle:"short",timeStyle:"short",hour12:false});
   const time = value => value ? format.format(new Date(value)) : "暂无记录";
@@ -18,9 +18,9 @@
     if(!response.ok){if(response.status===401)AppSession.logout(role,true);throw new Error(typeof data.detail==="string"?data.detail:"请检查输入信息和时间范围。");}
     return data;
   }
-  function action(text,callback,errorId=null) {
+  function action(text,callback) {
     const button=node("button",text);button.type="button";button.className="secondary";
-    button.onclick=async()=>{button.disabled=true;try{await callback();}catch(error){errorId?dialogError(errorId,error.message):message(error.message,true);}finally{button.disabled=false;}};
+    button.onclick=async()=>{button.disabled=true;try{await callback();}catch(error){message(error.message,true);}finally{button.disabled=false;}};
     return button;
   }
   function row(values) {
@@ -49,34 +49,20 @@
     $("createGrantButton").disabled=false;openModal("grantDialog");$("grantView").focus();
   }
 
-  function renderRecords() {
-    const student=students.find(s=>s.id===recordsStudentId);if(!student)return;
-    $("recordsDialogTitle").textContent=`${student.display_name}的授权记录`;$("grantFromRecords").disabled=!student.is_active;
-    const states={active:"有效",scheduled:"尚未生效",expired:"已到期",revoked:"已撤销"};
-    $("grants").replaceChildren(...grants.filter(g=>g.student_id===recordsStudentId).map(g=>{
-      const operations=permissionNames(g);
-      const status=states[g.state]+(g.revoked_at?`\n${time(g.revoked_at)} · 撤销人 #${g.revoked_by_id}`:"");
-      return row([g.scope==="doctor"?"医生名下全部患者":"历史患者授权",`${operations}${g.note?"\n备注："+g.note:""}`,g.is_permanent?"永久有效":`${time(g.starts_at)}\n至 ${time(new Date(g.ends_at).getTime()-1)}`,status,g.state==="active"||g.state==="scheduled"?action("撤销授权",async()=>{dialogError("recordsError");await api(`/doctor/student-permissions/${g.id}/revoke`,{method:"POST"});await load();message("学生权限已撤销。");},"recordsError"):"—"]);
-    }));
-    empty($("grants"),5,"暂无授权记录，可点击右下角“设置权限”。");
-  }
-  async function openRecords(student) {recordsStudentId=student.id;dialogError("recordsError");renderRecords();openModal("recordsDialog");await load();}
   async function load() {
     [students,grants]=await Promise.all([api("/doctor/students"),api("/doctor/student-permissions")]);
     $("studentCount").textContent=`${students.length} 人`;
     $("students").replaceChildren(...students.map(student=>{
       const operations=node("div");operations.className="team-actions";
       const assign=action("设置权限",()=>openGrant(student));assign.disabled=!student.is_active;assign.setAttribute("aria-haspopup","dialog");
-      const records=action("授权记录",()=>openRecords(student),"recordsError");records.setAttribute("aria-haspopup","dialog");
       const toggle=action(student.is_active?"停用":"启用",async()=>{await api(`/doctor/students/${student.id}`,{method:"PATCH",body:JSON.stringify({is_active:!student.is_active})});await load();message("学生账号状态已更新。");});
-      if(student.is_active)toggle.classList.add("stop-student");operations.append(assign,records,toggle);
+      if(student.is_active)toggle.classList.add("stop-student");operations.append(assign,toggle);
       const state=node("span",student.is_active?"启用":"停用");state.className=`account-state ${student.is_active?"":"inactive"}`;
       const current=currentPermission(student.id);
       const summary=current?(current.state==="scheduled"?"尚未生效":permissionNames(current)):grants.some(g=>g.student_id===student.id&&g.state==="active")?"旧版患者授权":"未设置";
       return row([student.display_name,student.username,state,summary,time(student.last_login_at),operations]);
     }));
     empty($("students"),6,"暂无学生，点击右上角“新增学生”开通账号。");
-    if($("recordsDialog").open)renderRecords();
   }
   [["studentPassword","showPassword"],["studentConfirm","showConfirm"]].forEach(([input,id])=>{
     $(id).onclick=()=>{const visible=$(input).type==="password";$(input).type=visible?"text":"password";$(id).textContent=visible?"隐藏密码":"显示密码";$(id).setAttribute("aria-pressed",String(visible));};
@@ -110,7 +96,6 @@
   $("studentDialog").onclose=resetStudent;
   $("newStudent").onclick=openStudent;
   $("grantPermanent").onchange=periodState;$("grantView").onchange=viewState;
-  $("grantFromRecords").onclick=()=>{const student=students.find(s=>s.id===recordsStudentId);if(student)openGrant(student);};
   $("refreshTeam").onclick=()=>load().catch(error=>message(error.message,true));
   $("logout").onclick=()=>AppSession.logout(role);
   async function init() {

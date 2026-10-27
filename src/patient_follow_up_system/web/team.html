@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学生与权限 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261027-team-1"><link rel="stylesheet" href="/static/admin.css?v=20261027-team-1"><link rel="stylesheet" href="/static/team.css?v=20261027-team-3"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学生与权限 · 随访工作台</title><link rel="stylesheet" href="/static/app.css"><link rel="stylesheet" href="/static/doctor-shell.css?v=20261027-team-1"><link rel="stylesheet" href="/static/admin.css?v=20261027-team-1"><link rel="stylesheet" href="/static/team.css?v=20261027-team-4"></head>
 <body class="doctor-app signed-in">
 <aside id="doctorSidebar" class="doctor-sidebar"></aside>
 <main class="doctor-main">
@@ -37,11 +37,5 @@
     <footer class="team-dialog-footer"><button type="button" class="secondary" data-close="grantDialog">取消</button><button id="createGrantButton" type="submit">保存权限</button></footer>
   </form>
 </dialog>
-<dialog id="recordsDialog" class="team-dialog records-dialog" aria-labelledby="recordsDialogTitle">
-  <header class="team-dialog-header"><div><h2 id="recordsDialogTitle">授权记录</h2><p class="muted">查看权限设置与变更历史。</p></div><button type="button" data-close="recordsDialog" class="dialog-close" aria-label="关闭授权记录">×</button></header>
-  <p id="recordsError" class="status error hidden dialog-error" role="alert"></p>
-  <div class="team-dialog-body account-table-wrap"><table class="account-table"><thead><tr><th scope="col">范围</th><th scope="col">权限与备注</th><th scope="col">有效期（北京时间）</th><th scope="col">状态 / 撤销记录</th><th scope="col">操作</th></tr></thead><tbody id="grants"></tbody></table></div>
-  <footer class="team-dialog-footer"><button type="button" class="secondary" data-close="recordsDialog">关闭</button><button id="grantFromRecords" type="button">设置权限</button></footer>
-</dialog>
-<script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261027-team-1"></script><script src="/static/team.js?v=20261027-team-3"></script>
+<script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261027-team-1"></script><script src="/static/team.js?v=20261027-team-4"></script>
 </body></html>
