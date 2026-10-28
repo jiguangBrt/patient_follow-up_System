@@ -19,6 +19,8 @@ from test_accounts_clinical import env as account_env  # noqa: F401 -- shared fi
 from patient_follow_up_system import clinical_ocr
 from patient_follow_up_system.models import (
     ClinicalDocument,
+    ClinicalField,
+    ClinicalReviewEvent,
     PatientDocument,
     PatientGrant,
     PatientIntakeLink,
@@ -632,6 +634,107 @@ def test_revoked_while_ocr_runs_discards_result(team, monkeypatch):
     )
     with factory() as db:
         assert db.get(ClinicalDocument, doc["id"]).extraction_status == "not_run"
+
+
+@pytest.mark.parametrize("disabled_account", ["student", "mentor", "doctor"])
+def test_disabled_account_while_ocr_runs_discards_result(
+    team, monkeypatch, disabled_account
+):
+    client, factory, ids, doctor, student, student_id = team
+    assert grant(team, can_edit=True).status_code == 201
+    doc = student_upload(team).json()
+    actor = doctor if disabled_account == "doctor" else student
+    disabled_id = student_id if disabled_account == "student" else ids["doctor"]
+    before_history = client.get(
+        f"/clinical-documents/{doc['id']}/history", headers=doctor
+    ).json()
+
+    def recognize(*_):
+        with factory() as db:
+            db.get(User, disabled_id).is_active = False
+            db.commit()
+        return ocr_result("虚构甲")
+
+    monkeypatch.setattr(clinical_ocr, "recognize", recognize)
+    result = client.post(
+        f"/clinical-documents/{doc['id']}/extract",
+        headers=actor,
+        json={"version": doc["version"]},
+    )
+    assert result.status_code == 401, result.text
+    assert "fields" not in result.json()
+    with factory() as db:
+        stored = db.get(ClinicalDocument, doc["id"])
+        assert stored.extraction_status == "not_run"
+        assert stored.version == doc["version"] and stored.pages == []
+        assert all(
+            f.candidate_value is None
+            for f in db.scalars(
+                select(ClinicalField).where(ClinicalField.document_id == stored.id)
+            )
+        )
+        events = list(
+            db.scalars(
+                select(ClinicalReviewEvent).where(
+                    ClinicalReviewEvent.document_id == stored.id
+                )
+            )
+        )
+        assert [e.action for e in events] == [e["action"] for e in before_history]
+
+
+@pytest.mark.parametrize("original_status", ["confirmed", "corrected"])
+@pytest.mark.parametrize("replacement", ["未经审核的修改", "", None])
+def test_edit_only_student_cannot_reset_confirmed_buffer_fields(
+    team, monkeypatch, original_status, replacement
+):
+    client, _, _, doctor, student, _ = team
+    assert grant(team, can_edit=True).status_code == 201
+    doc = student_upload(team).json()
+    monkeypatch.setattr(clinical_ocr, "recognize", lambda *_: ocr_result("虚构甲"))
+    result = client.post(
+        f"/clinical-documents/{doc['id']}/extract",
+        headers=doctor,
+        json={"version": doc["version"]},
+    )
+    assert result.status_code == 200, result.text
+    doc = result.json()
+    candidate = next(f for f in doc["fields"] if f["key"] == "chief_complaint")
+    original_value = (
+        candidate["candidate_value"] if original_status == "confirmed" else "医生更正主诉"
+    )
+    result = review(
+        client, doctor, doc, [field("chief_complaint", original_value, original_status)]
+    )
+    assert result.status_code == 200, result.text
+    doc = result.json()
+    assert doc["status"] == "buffered"
+    before_history = client.get(
+        f"/clinical-documents/{doc['id']}/history", headers=doctor
+    ).json()
+    changes = [
+        field("past_history", "一并提交的草稿", "pending"),
+        field("chief_complaint", replacement, "pending"),
+    ]
+    result = review(client, student, doc, changes, visit_date="2026-10-22")
+    assert result.status_code == 404, result.text
+    assert client.get(
+        f"/clinical-documents/{doc['id']}", headers=doctor
+    ).json() == doc
+    assert client.get(
+        f"/clinical-documents/{doc['id']}/history", headers=doctor
+    ).json() == before_history
+
+    # A reviewer may deliberately reopen a buffered confirmation, even without
+    # entry permission. Filed confirmations remain protected by the filing lock.
+    assert grant(team, can_review=True, can_edit=False).status_code == 201
+    result = review(client, student, doc, [changes[1]])
+    assert result.status_code == 200, result.text
+    updated = next(
+        f for f in result.json()["fields"] if f["key"] == "chief_complaint"
+    )
+    assert updated["review_status"] == "pending"
+    assert updated["confirmed_value"] == replacement
 
 
 def test_permanent_permissions_cover_all_current_and_future_patients_only_of_mentor(

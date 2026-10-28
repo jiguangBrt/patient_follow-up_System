@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.exc import StaleDataError
 
 from patient_follow_up_system import clinical_ocr
-from patient_follow_up_system.auth import require_roles
+from patient_follow_up_system.auth import get_current_user, oauth2_scheme, require_roles
 from patient_follow_up_system.database import get_db
 from patient_follow_up_system.models import (
     ClinicalDocument,
@@ -374,7 +374,13 @@ def preview(document_id: int, page_number: int, db: DB, doctor: Doctor):
 
 
 @router.post("/clinical-documents/{document_id}/extract")
-def extract(document_id: int, request: ExtractionRequest, db: DB, doctor: Doctor):
+def extract(
+    document_id: int,
+    request: ExtractionRequest,
+    db: DB,
+    doctor: Doctor,
+    token: Annotated[str, Depends(oauth2_scheme)],
+):
     doc = own_document(db, document_id, doctor, "edit")
     if doc.status != "buffered" or doc.version != request.version:
         raise HTTPException(409, "只能提取当前版本的缓冲区资料，请刷新。")
@@ -399,6 +405,9 @@ def extract(document_id: int, request: ExtractionRequest, db: DB, doctor: Doctor
             "extraction_version": clinical_ocr.OCR_VERSION,
         }
         error = "OCR 未能完成，请重试或对照原件手工录入。"
+    # rollback expired the session's users as well as the document. Revalidate
+    # the token and account before checking the current grant or writing results.
+    doctor = get_current_user(token, db)
     doc = own_document(db, document_id, doctor, "edit")
     if doc.version != version or doc.status != "buffered":
         raise HTTPException(409, "提取期间资料已更新，结果未覆盖，请刷新。")
@@ -462,12 +471,9 @@ def source_target(db: Session, doc: ClinicalDocument) -> int | None:
 
 @router.post("/clinical-documents/{document_id}/review")
 def review(document_id: int, request: Review, db: DB, doctor: Doctor):
-    operation = "review" if request.action != "save" or any(f.review_status != "pending" for f in request.fields) else "edit"
-    doc = own_document(db, document_id, doctor, operation)
+    doc = own_document(db, document_id, doctor)
     if doctor.role == UserRole.STUDENT and request.create_patient:
         raise HTTPException(403, "学生不能新建患者档案，请由所属医生建档并授权。")
-    if doctor.role == UserRole.STUDENT and doc.status == "filed":
-        own_document(db, document_id, doctor, "review")
     if doc.status == "rejected" or doc.version != request.version:
         raise HTTPException(409, "资料已更新或已驳回，请刷新。")
     if doc.status == "filed" and request.action != "save":
@@ -476,6 +482,20 @@ def review(document_id: int, request: Review, db: DB, doctor: Doctor):
     keys = [f.key for f in request.fields]
     if len(set(keys)) != len(keys) or any(k not in fields for k in keys):
         raise HTTPException(422, "字段重复或不存在。")
+    # Changing a confirmation is a review operation even when the client sends
+    # 'pending'. Decide from both stored and requested states before any writes.
+    operation = (
+        "review"
+        if doc.status == "filed"
+        or request.action != "save"
+        or any(
+            change.review_status != "pending"
+            or fields[change.key].review_status != "pending"
+            for change in request.fields
+        )
+        else "edit"
+    )
+    own_document(db, document_id, doctor, operation)
     changes = {}
     if "visit_date" in request.model_fields_set:
         if doc.status == "filed" and request.visit_date != doc.visit_date:
