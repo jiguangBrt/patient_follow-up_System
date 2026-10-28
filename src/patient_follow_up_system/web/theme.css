@@ -16,9 +16,9 @@
   --warning-soft: #fff8e8;
   --shadow: 0 8px 28px rgba(25, 59, 66, .055);
   --radius: 16px;
-  --font-body: 18px;
-  --font-control: 18px;
-  --font-small: 17px;
+  --font-body: 16px;
+  --font-control: 16px;
+  --font-small: 16px;
   --control-height: 48px;
   font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
   color: var(--text);
