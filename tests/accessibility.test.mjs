@@ -6,7 +6,7 @@ import vm from 'node:vm';
 const source = readFileSync(new URL('../src/patient_follow_up_system/web/accessibility.js', import.meta.url), 'utf8');
 const key = 'patient-follow-up-large-text';
 
-function setup({stored, blocked = false, loading = false} = {}) {
+function setup({stored, blocked = false, loading = false, staffSidebar = false} = {}) {
   const classes = new Set(), listeners = {}, windowListeners = {}, elements = [], writes = [];
   const storage = new Map(stored === undefined ? [] : [[key, stored]]);
   const make = () => ({children: [], attributes: {}, events: {}, className: '',
@@ -14,12 +14,14 @@ function setup({stored, blocked = false, loading = false} = {}) {
     addEventListener(name, fn) { this.events[name] = fn; },
     appendChild(el) { this.children.push(el); }, prepend(el) { this.children.unshift(el); }});
   const host = make();
+  const sidebar = staffSidebar ? make() : null;
+  sidebar?.appendChild({className: 'sidebar-profile'});
   const buttons = () => elements.filter(el => el.className === 'text-size-toggle');
   const context = vm.createContext({document: {
     documentElement: {classList: {toggle(name, enabled) { enabled ? classes.add(name) : classes.delete(name); }, contains: name => classes.has(name)}},
     readyState: loading ? 'loading' : 'complete', body: host,
     createElement() { const el = make(); elements.push(el); return el; },
-    querySelector(selector) { return selector === '.text-size-toggle' ? buttons()[0] : selector === '.doctor-main' ? host : null; },
+    querySelector(selector) { return selector === '.text-size-toggle' ? buttons()[0] : selector === '.sidebar-footer' ? sidebar : selector === '.doctor-main' ? host : null; },
     querySelectorAll: buttons,
     addEventListener(name, fn) { listeners[name] = fn; },
   }, localStorage: {
@@ -27,7 +29,7 @@ function setup({stored, blocked = false, loading = false} = {}) {
     setItem(name, value) { if (blocked) throw new Error('storage unavailable'); storage.set(name, value); writes.push([name, value]); },
   }, window: {addEventListener(name, fn) { windowListeners[name] = fn; }}});
   vm.runInContext(source, context);
-  return {classes, listeners, windowListeners, storage, buttons, writes};
+  return {classes, listeners, windowListeners, storage, buttons, writes, host, sidebar};
 }
 
 test('saved large-text preference applies before the first page render and persists on the next page', () => {
@@ -75,4 +77,13 @@ test('clearing browser preferences resets the font size in other open pages', ()
   state.windowListeners.storage({key: null});
   assert.equal(state.classes.has('large-text'), false);
   assert.equal(state.buttons()[0].attributes['aria-pressed'], 'false');
+});
+
+test('staff font control sits above the account row without adding a main-area control', () => {
+  const state = setup({staffSidebar: true});
+  assert.deepEqual(state.sidebar.children.map(el => el.className), ['accessibility-dock', 'sidebar-profile']);
+  assert.equal(state.host.children.length, 0);
+  assert.equal(state.buttons().length, 1);
+  state.buttons()[0].events.click();
+  assert.ok(state.classes.has('large-text'));
 });

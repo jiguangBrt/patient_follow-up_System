@@ -40,10 +40,12 @@
     });
     dock.appendChild(button);
 
+    const sidebarFooter = document.querySelector(".sidebar-footer");
     const doctorMain = document.querySelector(".doctor-main");
     const brandBar = document.querySelector(".brand-bar");
     const patientHeader = document.querySelector(".patient-header");
-    if (doctorMain) doctorMain.prepend(dock);
+    if (sidebarFooter) sidebarFooter.prepend(dock);
+    else if (doctorMain) doctorMain.prepend(dock);
     else if (brandBar) brandBar.appendChild(dock);
     else if (patientHeader) patientHeader.appendChild(dock);
     else document.body.prepend(dock);

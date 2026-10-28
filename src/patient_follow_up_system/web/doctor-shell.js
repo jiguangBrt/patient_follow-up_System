@@ -28,13 +28,11 @@
     ["设置", isStudent ? [["notice", "患者须知"]] : [["team", "学生与权限"], ["notice", "患者须知"]]],
   ];
   const root = document.getElementById("doctorSidebar");
-  root.innerHTML = '<div class="doctor-brand"><span class="brand-mark">随</span><div>随访工作台<small>临床资料管理</small></div></div><nav aria-label="医生工作区"></nav><div class="sidebar-footer">' + (isAdmin ? '<a href="/">统一登录入口 ↗</a>' : '') + '<div class="sidebar-profile"><span class="profile-avatar">医</span><div><strong id="sidebarUser">医生</strong>' + (isAdmin ? '<small>管理员工作区</small>' : '') + '</div><button id="logout" title="退出登录" aria-label="退出登录">退出</button></div></div>';
+  root.innerHTML = '<div class="doctor-brand"><span class="brand-mark">随</span><div>随访工作台<small>临床资料管理</small></div></div><nav aria-label="医生工作区"></nav><div class="sidebar-footer"><div class="sidebar-profile"><span class="profile-avatar">医</span><div><strong id="sidebarUser">医生</strong></div><button id="logout" title="退出登录" aria-label="退出登录">退出</button></div></div>';
   if (isAdmin) {
     root.querySelector("nav").setAttribute("aria-label", "管理员工作区");
     root.querySelector(".doctor-brand small").textContent = "平台管理";
-    root.querySelector(".sidebar-footer > a").href = AppPaths.url("/");
     root.querySelector(".profile-avatar").textContent = "管";
-    root.querySelector(".sidebar-profile small").textContent = "管理员工作区";
     root.querySelector("#sidebarUser").textContent = "管理员";
   }
   if (isStudent) {

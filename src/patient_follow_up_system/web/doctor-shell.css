@@ -12,11 +12,9 @@ body.doctor-app { background:#f5f7fa; color:#27384b; font-family:"Microsoft YaHe
 .nav-group a svg { width:19px; height:19px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; flex:none; }
 .nav-group a small { margin-left:auto; padding:2px 4px; color:#91a6b5; border:1px solid #3a5061; border-radius:4px; font-size:9px; white-space:nowrap; }
 .sidebar-footer { padding:16px 19px 21px; border-top:1px solid #294458; }
-.sidebar-footer > a { display:block; padding:0 4px 17px; color:#9db8c9; font-size:12px; text-decoration:none; }
 .sidebar-profile { display:flex; gap:10px; align-items:center; }
 .profile-avatar { background:#29475d; border-radius:50%; width:32px; height:32px; display:grid; place-items:center; font-size:13px; }
 .sidebar-profile strong { display:block; max-width:112px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; font-weight:500; }
-.sidebar-profile small { display:block; color:#8da6b7; font-size:10px; margin-top:4px; }
 .sidebar-profile button { margin-left:auto; min-height:30px; padding:4px; background:transparent; color:#a8becd; font-size:11px; font-weight:400; border-radius:4px; }
 .doctor-main { margin:0 0 0 236px; padding:0 38px 40px; max-width:none; min-width:0; }
 .workspace-topbar { display:flex; align-items:center; justify-content:space-between; height:84px; border-bottom:1px solid #e2e8ef; margin-bottom:30px; }

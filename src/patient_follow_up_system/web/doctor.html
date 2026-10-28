@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>医生工作台</title>
   <link rel="stylesheet" href="/static/app.css?v=20260911-5">
-  <link rel="stylesheet" href="/static/doctor-shell.css?v=20261022-intake-2">
+  <link rel="stylesheet" href="/static/doctor-shell.css?v=20261028-shell-3">
   <link rel="stylesheet" href="/static/patient-workspace.css?v=20261024-workspace-1">
-  <link rel="stylesheet" href="/static/theme.css?v=20261028-theme-3">
-  <script src="/static/accessibility.js?v=20261028-theme-3"></script>
+  <link rel="stylesheet" href="/static/theme.css?v=20261028-theme-4">
+  <script src="/static/accessibility.js?v=20261028-theme-4"></script>
 </head>
 <body class="doctor-app signed-in">
   <aside id="doctorSidebar" class="doctor-sidebar"></aside>
@@ -29,5 +29,5 @@
   </main>
   <dialog id="newPatientCard" class="doctor-modal hidden" aria-labelledby="newPatientTitle"><h2 id="newPatientTitle">新增患者</h2><form id="newPatientForm" class="form-grid"><label for="patientName">患者姓名</label><input id="patientName" required maxlength="100" placeholder="请输入医生确认的姓名"><p class="muted full-row">保存后从档案顶部打开专属建档二维码。</p><p id="newPatientError" class="status error hidden full-row" role="alert"></p><div class="row full-row"><button type="submit">保存患者</button><button type="button" class="secondary" id="cancelNewPatient">取消</button></div></form></dialog>
   <dialog id="inviteCard" class="doctor-modal hidden" aria-labelledby="qrTitle"><h2 id="qrTitle">患者专属建档二维码</h2><h3 id="qrPatientName"></h3><p>请妥善保管，可反复扫码阅读须知、填写信息和补交病历。</p><div id="qr" class="qr"></div><p id="expiry" class="muted"></p><p id="qrUrl" class="qr-url"></p><p class="muted">医生停用后，已打印的二维码也随即失效。</p><div class="row no-print"><a id="openInvite" class="buttonLink" target="_blank" rel="noreferrer">打开患者扫码页</a><button id="printInvite">打印二维码</button><button id="revokeInvite" class="secondary">停用二维码</button><button id="closeInvite" class="secondary">关闭</button></div></dialog>
-  <script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261028-shell-2"></script><script src="/static/doctor.js?v=20261027-team-3"></script>
+  <script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261028-shell-3"></script><script src="/static/doctor.js?v=20261027-team-3"></script>
 </body></html>
