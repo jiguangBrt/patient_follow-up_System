@@ -21,7 +21,8 @@ class AccountCreate(BaseModel):
     username: str = Field(pattern=r"^[A-Za-z0-9_][A-Za-z0-9_.-]{2,49}$")
     display_name: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=8, max_length=128)
-    role: Literal["doctor", "patient"]
+    role: Literal["doctor", "student", "patient"]
+    mentor_doctor_id: int | None = Field(default=None, ge=1)
 
     @field_validator("display_name")
     @classmethod
@@ -41,6 +42,7 @@ def account_info(user: User) -> dict:
         "username": user.username,
         "display_name": user.display_name,
         "role": user.role,
+        "mentor_doctor_id": user.mentor_doctor_id,
         "is_active": user.is_active,
         "created_at": user.created_at,
         "last_login_at": user.last_login_at.replace(tzinfo=UTC)
@@ -60,7 +62,7 @@ def list_accounts(db: DB, admin: Admin):
         account_info(u)
         for u in db.scalars(
             select(User)
-            .where(User.role.in_([UserRole.DOCTOR, UserRole.PATIENT]))
+            .where(User.role.in_([UserRole.DOCTOR, UserRole.STUDENT, UserRole.PATIENT]))
             .order_by(User.id.desc())
         )
     ]
@@ -68,11 +70,18 @@ def list_accounts(db: DB, admin: Admin):
 
 @router.post("/admin/accounts", status_code=201)
 def create_account(request: AccountCreate, db: DB, admin: Admin):
+    if request.role == "student":
+        mentor = db.get(User, request.mentor_doctor_id) if request.mentor_doctor_id else None
+        if not mentor or mentor.role != UserRole.DOCTOR or not mentor.is_active:
+            raise HTTPException(422, "学生账号必须选择一位启用的所属医生。")
+    elif request.mentor_doctor_id is not None:
+        raise HTTPException(422, "只有学生账号可以指定所属医生。")
     user = User(
         username=request.username,
         display_name=request.display_name,
         password_hash=hash_password(request.password),
         role=UserRole(request.role),
+        mentor_doctor_id=request.mentor_doctor_id,
         is_active=True,
     )
     db.add(user)
@@ -89,7 +98,7 @@ def create_account(request: AccountCreate, db: DB, admin: Admin):
 @router.patch("/admin/accounts/{user_id}")
 def change_status(user_id: int, request: AccountStatus, db: DB, admin: Admin):
     user = db.get(User, user_id)
-    if user is None or user.role not in (UserRole.DOCTOR, UserRole.PATIENT):
+    if user is None or user.role not in (UserRole.DOCTOR, UserRole.STUDENT, UserRole.PATIENT):
         raise HTTPException(404, "测试账号不存在。")
     if user.is_active != request.is_active:
         user.is_active = request.is_active

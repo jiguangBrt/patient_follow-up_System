@@ -15,7 +15,6 @@ from sqlalchemy.orm import Session
 from patient_follow_up_system.database import get_db
 from patient_follow_up_system.models import User, UserRole
 
-
 load_dotenv()
 
 ALGORITHM = "HS256"
@@ -70,9 +69,18 @@ def authenticate_user(
     user = db.scalar(select(User).where(User.username == username))
     if user is None or not user.is_active:
         return None
+    if not mentor_active(db, user):
+        return None
     if not verify_password(password, user.password_hash):
         return None
     return user
+
+
+def mentor_active(db: Session, user: User) -> bool:
+    if user.role != UserRole.STUDENT:
+        return True
+    mentor = db.get(User, user.mentor_doctor_id) if user.mentor_doctor_id else None
+    return bool(mentor and mentor.role == UserRole.DOCTOR and mentor.is_active)
 
 
 def get_current_user(
@@ -93,7 +101,7 @@ def get_current_user(
         raise credentials_exception from exc
 
     user = db.get(User, user_id)
-    if user is None or not user.is_active or user.role != token_role:
+    if user is None or not user.is_active or user.role != token_role or not mentor_active(db, user):
         raise credentials_exception
     return user
 

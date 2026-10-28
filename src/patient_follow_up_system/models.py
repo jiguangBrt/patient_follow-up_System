@@ -1,20 +1,23 @@
 from datetime import date, datetime
 from enum import StrEnum
+from typing import ClassVar
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     CheckConstraint,
     DateTime,
-    Enum as SqlEnum,
     ForeignKey,
-    Integer,
-    JSON,
     Index,
+    Integer,
     String,
     Text,
     UniqueConstraint,
     func,
     text,
+)
+from sqlalchemy import (
+    Enum as SqlEnum,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +27,7 @@ from patient_follow_up_system.database import Base
 class UserRole(StrEnum):
     ADMIN = "admin"
     DOCTOR = "doctor"
+    STUDENT = "student"
     PATIENT = "patient"
 
 
@@ -62,11 +66,35 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
     )
+    mentor_doctor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.current_timestamp(),
         nullable=False,
     )
+
+
+class PatientGrant(Base):
+    """Current student settings; patient_id only preserves legacy limited scopes."""
+
+    __tablename__ = "patient_grants"
+    __table_args__ = (
+        CheckConstraint("(starts_at IS NULL AND ends_at IS NULL) OR (starts_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at > starts_at)", name="ck_patient_grant_dates"),
+        CheckConstraint("can_view OR (NOT can_edit AND NOT can_review)", name="ck_patient_grant_view"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    patient_id: Mapped[int | None] = mapped_column(ForeignKey("patients.id"), index=True, nullable=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    granted_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    purpose: Mapped[str] = mapped_column(String(300))
+    can_view: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1", nullable=False)
+    can_edit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    can_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp())
 
 
 class Patient(Base):
@@ -393,7 +421,7 @@ class ClinicalDocument(Base):
     reviewed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
-    __mapper_args__ = {"version_id_col": version}
+    __mapper_args__: ClassVar[dict] = {"version_id_col": version}
 
 
 class ClinicalField(Base):

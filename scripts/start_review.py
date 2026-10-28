@@ -86,6 +86,7 @@ def create_samples():
 
 
 def main():
+    global REVIEW_ROOT
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--host",
@@ -96,9 +97,11 @@ def main():
         "--public-base-url", help="二维码使用的外部站点地址，例如 http://热点IPv4:8011"
     )
     parser.add_argument("--port", type=int, default=8010)
+    parser.add_argument("--data-dir", type=Path, default=REVIEW_ROOT, help="本机隔离验收目录，不使用应用日常数据库")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--open-browser", action="store_true")
     args = parser.parse_args()
+    REVIEW_ROOT = args.data_dir.resolve()
     REVIEW_ROOT.mkdir(parents=True, exist_ok=True)
     public_url_path = REVIEW_ROOT / "public-base-url.txt"
     if args.public_base_url:
@@ -170,7 +173,7 @@ def main():
     print(f"独立验收数据和虚构样例：{REVIEW_ROOT}", flush=True)
     print(f"统一登录：http://{args.host}:{args.port}/", flush=True)
     print(f"扫码地址：{os.getenv('PUBLIC_BASE_URL', '跟随当前访问地址')}", flush=True)
-    print("登录页选择管理员：账号 aaa001；选择医生：账号 ddd001", flush=True)
+    print("登录页选择管理员：账号 aaa001；选择医生团队：账号 ddd001", flush=True)
     print(f"管理员和医生初始密码：{DEMO_PASSWORD}（只用于本机隔离测试）", flush=True)
     if not args.prepare_only:
         import uvicorn

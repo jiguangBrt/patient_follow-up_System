@@ -1,5 +1,8 @@
 const $ = id => document.getElementById(id);
-let token = AppSession.require("doctor");
+const staffRole = AppSession.staffRole();
+const isStudent = staffRole === "student";
+let token = AppSession.require(staffRole);
+let patientPermissions = [];
 let doctorPatients = [];
 let selectedPatientId = null;
 let doctorId = null;
@@ -12,7 +15,7 @@ function message(text,error=false) { $("message").textContent=text; $("message")
 async function api(path,options={}) {
   const response=await AppPaths.fetch(path,{...options,headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`}});
   const data=await response.json();
-  if(!response.ok){if(response.status===401)AppSession.logout("doctor",true);throw new Error(typeof data.detail==="string"?data.detail:`请求失败（${response.status}）`);}
+  if(!response.ok){if(response.status===401)AppSession.logout(staffRole,true);throw new Error(typeof data.detail==="string"?data.detail:`请求失败（${response.status}）`);}
   return data;
 }
 function actionButton(text,action,secondary=false) {
@@ -41,7 +44,7 @@ function renderPatients() {
     const button=actionButton(patient.display_name,()=>selectPatient(patient.id));button.className=`patient-name-button ${patient.id===selectedPatientId?"selected":""}`;
     button.setAttribute("aria-pressed",String(patient.id===selectedPatientId));button.dataset.patientId=patient.id;button.title=patient.patient_code;return button;
   }));
-  if(!items.length)$("patients").append(node("p",query?"没有匹配的患者":"暂无患者，请先新增患者。","muted"));
+  if(!items.length)$("patients").append(node("p",query?"没有匹配的患者":isStudent?"暂无可查看患者，请联系所属医生。":"暂无患者，请先新增患者。","muted"));
 }
 async function loadPatients(preferred=selectedPatientId) {
   doctorPatients=await api("/patients");
@@ -62,11 +65,13 @@ async function selectPatient(id) {
   const pane=$("patientDetailScroll");const position=changed?0:pane.scrollTop;pane.replaceChildren(node("p","正在加载患者资料…","muted"));
   try {
     const data=await api(`/patients/${id}/workspace`);if(epoch!==selectionEpoch||selectedPatientId!==id)return;
+    patientPermissions=data.permissions||(isStudent?[]:["view","edit","review"]);
     const profile=data.profile;
     $("patientMeta").textContent=profile?`${patient.patient_code} · ${profile.sex} · 生日 ${profile.date_of_birth} · 操作员 ${profile.operator_relationship}`:`${patient.patient_code} · 尚未提交基本信息`;
     pane.replaceChildren();
     const overview=node("div",null,"patient-overview");overview.append(node("span",profile?`建档状态：${stateNames[profile.status]||profile.status} · 须知版本 ${profile.notice_version||"未记录"}`:"患者扫码后可填写基本信息并补交病历。"));
-    if(profile?.status==="pending")overview.append(actionButton("审核建档申请",()=>{location.hash="intakes";},true));
+    if(isStudent)overview.append(node("span",`我的权限：${patientPermissions.map(p=>({view:"查看",edit:"录入",review:"审核"})[p]).join("、")} · 到期或撤销后失效`));
+    if(profile?.status==="pending"&&patientPermissions.includes("review"))overview.append(actionButton("审核建档申请",()=>{location.hash="intakes";},true));
     pane.append(overview);
     if(data.unfiled.length)pane.append(unfiledModule(data.unfiled));
     data.visits.forEach(visit=>pane.append(visitModule(visit)));
@@ -96,13 +101,13 @@ function unfiledModule(records) {
   const section=moduleShell("待整理与未归档资料",`${records.length} 份资料`,"unfiled-module");
   records.forEach(record=>{
     const article=node("article",null,"record-content");article.append(node("h3",record.original_name),node("p",`${stateNames[record.status]||record.status} · ${record.candidate_date?`识别/暂存日期：${record.candidate_date}（待确认）`:"就诊日期待识别或补填"}`,"muted"));
-    const actions=node("div",null,"row");actions.append(actionButton("查看原件",()=>openOriginal(record.kind,record.id),true),actionButton(record.status==="rejected"?"查看审核记录":"识别并审核",()=>{location.href=AppPaths.url(clinicalUrl(record));},true));article.append(actions);section.append(article);
+    const actions=node("div",null,"row");actions.append(actionButton("查看原件",()=>openOriginal(record.kind,record.id),true));if(!isStudent||record.kind==="clinical"||patientPermissions.includes("edit"))actions.append(actionButton(record.status==="rejected"?"查看审核记录":isStudent&&!patientPermissions.includes("edit")&&!patientPermissions.includes("review")?"查看资料":"识别并审核",()=>{location.href=AppPaths.url(clinicalUrl(record));},true));article.append(actions);section.append(article);
   });return section;
 }
 async function openOriginal(kind,id) {
   const paths={clinical:`/clinical-documents/${id}/file`,patient:`/patient-documents/${id}/file`,intake:`/intake-submissions/${id}/document`};
   const response=await AppPaths.fetch(paths[kind],{headers:{Authorization:`Bearer ${token}`}});
-  if(!response.ok){if(response.status===401)AppSession.logout("doctor",true);const error=await response.json().catch(()=>({}));throw new Error(error.detail||"原件暂时无法打开");}
+  if(!response.ok){if(response.status===401)AppSession.logout(staffRole,true);const error=await response.json().catch(()=>({}));throw new Error(error.detail||"原件暂时无法打开");}
   const url=URL.createObjectURL(await response.blob());window.open(url,"_blank","noopener");setTimeout(()=>URL.revokeObjectURL(url),60000);
 }
 async function createInvite() {
@@ -122,8 +127,8 @@ async function loadIntakes() {
     const items=await api("/intake-submissions");$("intakes").replaceChildren(...items.map(submission=>{
       const item=node("article",null,"patient-card-wide");item.append(detailLine("患者姓名",submission.display_name),detailLine("基本信息",`${submission.sex} · ${submission.date_of_birth} · ${submission.operator_relationship}`),detailLine("状态",stateNames[submission.status]||submission.status),detailLine("资料",submission.has_document?"原件已保存，待识别核对":"仅提交基本信息，未上传病历"));
       const bar=node("div",null,"intake-action-bar");
-      if(submission.has_document){const actions=node("div",null,"intake-document-actions");actions.append(actionButton("查看原始资料",()=>openOriginal("intake",submission.id),true),actionButton("识别并逐字段审核",()=>{location.href=AppPaths.url(`/clinical?source=intake&id=${submission.id}`);},true));bar.append(actions);}
-      if(submission.status==="pending"){const actions=node("div",null,"intake-review-actions");const reject=actionButton("驳回",()=>reviewIntake(submission,"reject"));reject.className="danger";actions.append(actionButton("批准",()=>reviewIntake(submission,"approve")),reject);bar.append(actions);}
+      if(submission.has_document){const actions=node("div",null,"intake-document-actions");actions.append(actionButton("查看原始资料",()=>openOriginal("intake",submission.id),true));if(!isStudent||submission.permissions?.includes("edit"))actions.append(actionButton("识别并逐字段审核",()=>{location.href=AppPaths.url(`/clinical?source=intake&id=${submission.id}`);},true));bar.append(actions);}
+      if(submission.status==="pending"&&(!isStudent||submission.permissions?.includes("review"))){const actions=node("div",null,"intake-review-actions");const reject=actionButton("驳回",()=>reviewIntake(submission,"reject"));reject.className="danger";actions.append(actionButton("批准",()=>reviewIntake(submission,"approve")),reject);bar.append(actions);}
       item.append(bar);return item;
     }));if(!items.length)$("intakes").append(node("p","暂无建档申请。请先在患者管理中录入姓名并生成专属建档码。","muted"));
   }catch(error){message(error.message,true);}
@@ -146,7 +151,7 @@ $("revokeInvite").onclick=async()=>{
   catch(error){$("expiry").textContent=error.message;$("revokeInvite").disabled=false;}
 };
 ["newPatientCard","inviteCard"].forEach(id=>{$(id).onclose=()=>$(id).classList.add("hidden");});
-$("logout").onclick=()=>AppSession.logout("doctor");window.addEventListener("hashchange",activateDoctorView);
+$("logout").onclick=()=>AppSession.logout(staffRole);window.addEventListener("hashchange",activateDoctorView);
 window.addEventListener("pageshow",event=>{if(event.persisted&&token)loadPatients().catch(error=>message(error.message,true));});
-async function init(){if(!token)return;try{const me=await api("/auth/me");if(me.role!=="doctor"){AppSession.logout("doctor");return;}doctorId=me.id;DoctorShell.setUser(me.display_name);activateDoctorView();await Promise.all([loadPatients(),loadCurrentNotice()]);}catch(error){message(error.message,true);}}
+async function init(){if(!token)return;try{const me=await api("/auth/me");if(me.role!==staffRole){AppSession.logout(staffRole);return;}doctorId=me.id;DoctorShell.setUser(me.display_name);if(isStudent){["showNewPatient","showPatientQr","createIntakeLink"].forEach(id=>$(id).classList.add("hidden"));}activateDoctorView();await Promise.all([loadPatients(),loadCurrentNotice()]);if(isStudent&&!doctorPatients.length){$("patientMeta").textContent="请联系所属医生设置访问权限。";$("patientDetailScroll").replaceChildren(emptyState("暂无访问权限","医生开启查看权限后，刷新即可查看其名下患者；权限到期或撤销后无法访问。"));}}catch(error){message(error.message,true);}}
 init();
