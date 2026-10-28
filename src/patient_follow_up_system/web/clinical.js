@@ -26,22 +26,53 @@ async function list() {
   }));
   if(!documents.length) $("documents").textContent="暂无病例，请先上传原件。";
 }
-async function preview(page, evidence=null) {
+function setPreviewState(state, text="") {
+  $("previewWrap").classList.toggle("hidden",state!=="ready");
+  $("previewStatus").classList.toggle("hidden",state==="ready");
+  $("previewStatus").classList.toggle("preview-error",state==="error");
+  $("previewStatus").textContent=text;
+  $("previewStage").setAttribute("aria-busy",String(state==="loading"));
+}
+function resetPreview() {
   const sequence=++previewSequence;
-  const response=await AppPaths.fetch(`/clinical-documents/${current.id}/pages/${page}`,{headers:{Authorization:`Bearer ${token}`}});
-  if(!response.ok) { if(sequence===previewSequence) {$("preview").removeAttribute("src");$("highlight").classList.add("hidden");message("预览不可用，请打开原件手工核对。",true);} return; }
-  const blob=await response.blob(); if(sequence!==previewSequence) return;
-  if(previewUrl) URL.revokeObjectURL(previewUrl);
-  previewUrl=URL.createObjectURL(blob); $("preview").src=previewUrl;
-  $("previewPage").value=String(page); $("highlight").classList.toggle("hidden",!evidence);
-  if(evidence) {
-    const [x0,y0,x1,y1]=evidence.box;
-    Object.assign($("highlight").style,{left:`${x0*100}%`,top:`${y0*100}%`,width:`${(x1-x0)*100}%`,height:`${(y1-y0)*100}%`});
-    $("evidenceText").textContent=`第 ${page} 页原文：${evidence.text}`;
-  } else $("evidenceText").textContent="点击字段的“定位原文”查看对应证据。";
+  const image=$("preview");image.onload=null;image.onerror=null;image.removeAttribute("src");
+  if(previewUrl)URL.revokeObjectURL(previewUrl);
+  previewUrl=null;$("highlight").classList.add("hidden");
+  setPreviewState("loading","正在加载原件…");
+  return sequence;
+}
+async function preview(page, evidence=null) {
+  const sequence=resetPreview();
+  const fail=()=>{
+    if(sequence!==previewSequence)return;
+    resetPreview();
+    setPreviewState("error","预览暂时无法加载，请刷新页面重试，或打开原件查看。");
+  };
+  try {
+    const response=await AppPaths.fetch(`/clinical-documents/${current.id}/pages/${page}`,{headers:{Authorization:`Bearer ${token}`}});
+    if(sequence!==previewSequence)return;
+    if(!response.ok){if(response.status===401)AppSession.logout(staffRole,true);fail();return;}
+    const blob=await response.blob();if(sequence!==previewSequence)return;
+    const url=URL.createObjectURL(blob);previewUrl=url;
+    const image=$("preview");
+    image.onload=()=>{
+      if(sequence!==previewSequence||previewUrl!==url)return;
+      resizePreview();
+      $("previewPage").value=String(page);$("highlight").classList.toggle("hidden",!evidence);
+      if(evidence){
+        const [x0,y0,x1,y1]=evidence.box;
+        Object.assign($("highlight").style,{left:`${x0*100}%`,top:`${y0*100}%`,width:`${(x1-x0)*100}%`,height:`${(y1-y0)*100}%`});
+        $("evidenceText").textContent=`第 ${page} 页原文：${evidence.text}`;
+      }else $("evidenceText").textContent="点击字段的“定位原文”查看对应证据。";
+      setPreviewState("ready");
+    };
+    image.onerror=fail;
+    image.src=url;
+  }catch{fail();}
 }
 async function open(id) {
-  try{current=await api(`/clinical-documents/${id}`);}catch(error){current=null;$("reviewCard").classList.add("hidden");document.body.classList.remove("clinical-review-open");$("preview").removeAttribute("src");throw error;}
+  resetPreview();$("message").classList.add("hidden");
+  try{current=await api(`/clinical-documents/${id}`);}catch(error){current=null;resetPreview();$("reviewCard").classList.add("hidden");document.body.classList.remove("clinical-review-open");throw error;}
   history.replaceState(null,"",AppPaths.url(`/clinical?id=${id}`));
   render(); await preview(1); $("fields").scrollTop=0;
 }
@@ -51,7 +82,6 @@ function resizePreview() {
   const scale=Math.min(stage.clientWidth/image.naturalWidth,stage.clientHeight/image.naturalHeight);
   Object.assign($("previewWrap").style,{width:`${image.naturalWidth*scale}px`,height:`${image.naturalHeight*scale}px`});
 }
-$("preview").onload=resizePreview;
 new ResizeObserver(resizePreview).observe($("previewStage"));
 function render() {
   const doc=current; editors.clear();
@@ -118,11 +148,11 @@ bind("save",()=>review("save"));bind("fileRecord",()=>review("file"));bind("reje
 bind("refresh",async()=>{await list();message("缓冲区已刷新；打开资料可加载最新审核版本。");});
 bind("openOriginal",async()=>{const response=await AppPaths.fetch(`/clinical-documents/${current.id}/file`,{headers:{Authorization:`Bearer ${token}`}});if(!response.ok)throw new Error("原件不可用或登录已失效");const url=URL.createObjectURL(await response.blob());window.open(url,"_blank","noopener");setTimeout(()=>URL.revokeObjectURL(url),60000);});
 bind("history",async()=>{if(!$("historyText").classList.contains("hidden")){$("historyText").classList.add("hidden");return;}const events=await api(`/clinical-documents/${current.id}/history`);$("historyText").textContent=JSON.stringify(events,null,2);$("historyText").classList.remove("hidden");});
-$("backToBuffer").onclick=()=>{if(!window.confirm("返回缓冲区？未暂存的修改不会保存。"))return;document.body.classList.remove("clinical-review-open");$("reviewCard").classList.add("hidden");history.replaceState(null,"",AppPaths.url("/clinical"));};
+$("backToBuffer").onclick=()=>{if(!window.confirm("返回缓冲区？未暂存的修改不会保存。"))return;resetPreview();document.body.classList.remove("clinical-review-open");$("reviewCard").classList.add("hidden");history.replaceState(null,"",AppPaths.url("/clinical"));};
 $("previewPage").onchange=()=>preview(Number($("previewPage").value));
 $("logout").onclick=()=>AppSession.logout(staffRole);
 async function init(){try{if(!token)return;const me=await api("/auth/me");if(me.role!==staffRole){AppSession.logout(staffRole);return;}DoctorShell.setUser(me.display_name);patients=await api("/patients");if(isStudent){$("uploadPatient").classList.remove("hidden");$("uploadPatient").required=true;$("uploadPatient").replaceChildren(new Option("请选择已获录入授权的患者",""),...patients.filter(p=>p.permissions.includes("edit")).map(p=>new Option(`${p.display_name}（${p.patient_code}）`,String(p.id))));$("studentUploadHelp").classList.remove("hidden");}await list();const params=new URLSearchParams(location.search);
   if(params.get("source")&&params.get("id")){const doc=await api("/clinical-documents/import",{method:"POST",body:JSON.stringify({source_kind:params.get("source"),source_id:Number(params.get("id"))})});await open(doc.id);await list();}
-  else if(params.get("id"))await open(Number(params.get("id")));message("缓冲区候选不会自动绑定患者，请核对姓名及每项内容。");
+  else if(params.get("id"))await open(Number(params.get("id")));if(!current)message("缓冲区候选不会自动绑定患者，请核对姓名及每项内容。");
 }catch(e){message(e.message,true);}}
 init();
