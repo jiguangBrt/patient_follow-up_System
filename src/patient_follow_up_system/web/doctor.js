@@ -9,7 +9,7 @@ let doctorId = null;
 let selectionEpoch = 0;
 let currentInvitationId = null;
 let openNewPatientAfterView = false;
-const stateNames = {pending:"等待医生审核", approved:"已批准", rejected:"已驳回", buffered:"待医生确认", filed:"已归档"};
+const stateNames = {enrolled:"已建档",pending:"等待医生审核", approved:"已批准", rejected:"已驳回", buffered:"待医生确认", filed:"已归档"};
 function node(tag, text, className) { const el=document.createElement(tag); if(text!=null)el.textContent=text; if(className)el.className=className; return el; }
 function message(text,error=false) { $("message").textContent=text; $("message").className=`status ${error?"error":"success"}`; }
 async function api(path,options={}) {
@@ -53,21 +53,21 @@ async function loadPatients(preferred=selectedPatientId) {
   if(chosen)await selectPatient(chosen.id);
   else {
     selectedPatientId=null;selectionEpoch++;AppPaths.storage.removeItem(`selectedPatient:${doctorId}`);renderPatients();$("patientHeading").textContent="还没有患者";$("patientMeta").textContent="请从左侧新增患者，开始建档与资料整理。";
-    $("showPatientQr").disabled=true;$("refreshPatient").disabled=true;$("patientDetailScroll").replaceChildren(emptyState("暂无患者档案","点击“新增患者”，填写姓名后即可生成专属建档二维码。"));
+    $("showPatientQr").disabled=true;$("refreshPatient").disabled=true;$("showGastritis").disabled=true;$("patientDetailScroll").replaceChildren(emptyState("暂无患者档案","点击“新增患者”，填写姓名后即可生成专属建档二维码。"));
   }
 }
 function emptyState(title,description) {const el=node("div",null,"patient-empty");el.append(node("h2",title),node("p",description));return el;}
 async function selectPatient(id) {
   const patient=doctorPatients.find(p=>p.id===id);if(!patient)return;
-  const changed=selectedPatientId!==id;selectedPatientId=id;const epoch=++selectionEpoch;
+  $("showGastritis").disabled=true;$("showGastritis").dataset.patientId="";const changed=selectedPatientId!==id;selectedPatientId=id;const epoch=++selectionEpoch;
   AppPaths.storage.setItem(`selectedPatient:${doctorId}`,String(id));closeModal("inviteCard");currentInvitationId=null;renderPatients();
   $("patientHeading").textContent=patient.display_name;$("patientMeta").textContent=patient.patient_code;$("showPatientQr").disabled=false;$("refreshPatient").disabled=false;
   const pane=$("patientDetailScroll");const position=changed?0:pane.scrollTop;pane.replaceChildren(node("p","正在加载患者资料…","muted"));
   try {
     const data=await api(`/patients/${id}/workspace`);if(epoch!==selectionEpoch||selectedPatientId!==id)return;
     patientPermissions=data.permissions||(isStudent?[]:["view","edit","review"]);
-    const profile=data.profile;
-    $("patientMeta").textContent=profile?`${patient.patient_code} · ${profile.sex} · 生日 ${profile.date_of_birth} · 操作员 ${profile.operator_relationship}`:`${patient.patient_code} · 尚未提交基本信息`;
+    $("showGastritis").dataset.patientId=String(id);$("showGastritis").dataset.permissions=patientPermissions.join(",");$("showGastritis").disabled=false;const profile=data.profile;
+    $("patientMeta").textContent=profile?`${patient.patient_code} · ${profile.sex} · 生日 ${profile.date_of_birth} · 操作员 ${profile.operator_relationship}${profile.phone?` · 电话 ${profile.phone}`:""}`:`${patient.patient_code} · 尚未提交基本信息`;
     pane.replaceChildren();
     const overview=node("div",null,"patient-overview");overview.append(node("span",profile?`建档状态：${stateNames[profile.status]||profile.status} · 须知版本 ${profile.notice_version||"未记录"}`:"患者扫码后可填写基本信息并补交病历。"));
     if(isStudent)overview.append(node("span",`我的权限：${patientPermissions.map(p=>({view:"查看",edit:"录入",review:"审核"})[p]).join("、")} · 到期或撤销后失效`));

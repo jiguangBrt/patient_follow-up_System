@@ -21,6 +21,7 @@ if not database_url:
 config.set_main_option("sqlalchemy.url", database_url)
 
 from patient_follow_up_system import models  # noqa: E402, F401
+from patient_follow_up_system import portal_models, gastritis_models  # noqa: E402, F401
 from patient_follow_up_system.database import Base  # noqa: E402
 
 # Interpret the config file for Python logging.

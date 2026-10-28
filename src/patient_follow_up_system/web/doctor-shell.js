@@ -54,6 +54,44 @@
     });
     nav.append(group);
   });
+  if (!isAdmin && !isStudent) {
+    const link = document.createElement("a"); link.href = "#"; link.textContent = "团队公共建档码";
+    const group = root.querySelectorAll(".nav-group")[0]; group.append(link);
+    const dialog = document.createElement("dialog"); dialog.className = "enrollment-dialog";
+    dialog.style.cssText = "width:min(92vw,560px);max-height:90dvh;overflow:auto;border:1px solid #cce4df;border-radius:18px;padding:24px";
+    const heading = document.createElement("h2"); heading.textContent = "团队公共建档码";
+    const message = document.createElement("p"); message.setAttribute("role", "status");
+    const help = document.createElement("p"); help.textContent = "患者扫码填写基本信息后自动加入您的随访名单。此码可供不同患者使用，请勿分享患者个人访问凭据。";
+    const qr = document.createElement("div"); qr.style.cssText = "max-width:280px;margin:16px auto";
+    const address = document.createElement("a"); address.style.cssText = "display:block;overflow-wrap:anywhere;margin:16px 0"; address.target = "_blank"; address.rel = "noopener noreferrer";
+    const rotate = document.createElement("button"); rotate.type = "button"; rotate.className = "secondary"; rotate.textContent = "停用旧码并生成新码";
+    const confirmation = document.createElement("div"); confirmation.hidden = true;
+    const warning = document.createElement("p"); warning.textContent = "换码后，旧公共二维码将无法用于新建档。已建档患者的个人访问凭据继续保留。";
+    const confirm = document.createElement("button"); confirm.type = "button"; confirm.textContent = "确认换码";
+    const cancel = document.createElement("button"); cancel.type = "button"; cancel.className = "secondary"; cancel.textContent = "取消";
+    confirmation.append(warning, confirm, cancel);
+    const close = document.createElement("button"); close.type = "button"; close.className = "secondary"; close.textContent = "关闭";
+    dialog.append(heading, message, help, qr, address, rotate, confirmation, close); document.body.append(dialog);
+    let pending = false;
+    async function load(renew = false) {
+      if (pending) return; pending = true; rotate.disabled = confirm.disabled = true; message.textContent = "正在获取二维码…";
+      try {
+        const token = AppPaths.storage.getItem("doctorToken");
+        const response = await AppPaths.fetch(renew ? "/doctor/enrollment-link/rotate" : "/doctor/enrollment-link", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: "{}" });
+        const data = await response.json(); if (!response.ok) throw new Error(typeof data.detail === "string" ? data.detail : "二维码暂不可用");
+        const parsed = new DOMParser().parseFromString(data.qr_svg, "image/svg+xml"); const svg = parsed.documentElement;
+        if (svg.localName !== "svg") throw new Error("二维码格式异常");
+        qr.replaceChildren(document.importNode(svg, true)); const image = qr.querySelector("svg"); image.style.width = "100%"; image.style.height = "auto";
+        address.href = data.intake_url; address.textContent = "打开患者建档页面";
+        confirmation.hidden = true; rotate.hidden = false; message.textContent = renew ? "旧公共码已停用，请使用此新码。" : "公共码长期有效，直到您主动换码。";
+      } catch (error) { message.textContent = error.message || "二维码加载失败，请稍后重试。"; }
+      finally { pending = false; rotate.disabled = confirm.disabled = false; }
+    }
+    link.onclick = event => { event.preventDefault(); dialog.showModal(); load(); };
+    rotate.onclick = () => { confirmation.hidden = false; rotate.hidden = true; };
+    cancel.onclick = () => { confirmation.hidden = true; rotate.hidden = false; };
+    confirm.onclick = () => load(true); close.onclick = () => dialog.close();
+  }
   window.DoctorShell = {
     activate(view) { root.querySelectorAll("[data-view]").forEach(link => { link.classList.toggle("active", link.dataset.view === view); if(link.dataset.view === view) link.setAttribute("aria-current","page"); else link.removeAttribute("aria-current"); }); },
     setUser(name) { document.getElementById("sidebarUser").textContent = name; },

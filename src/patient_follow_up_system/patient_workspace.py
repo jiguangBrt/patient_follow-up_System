@@ -18,10 +18,12 @@ from patient_follow_up_system.models import (
     PatientDocument,
     PatientIntakeLink,
     PatientIntakeSubmission,
+    PatientNoticeVersion,
     User,
     UserRole,
 )
 from patient_follow_up_system.permissions import patient_permissions, require_patient
+from patient_follow_up_system.portal_models import PortalConsent, PortalProfile
 from patient_follow_up_system.visit_dates import suggest_visit_date
 
 router = APIRouter()
@@ -137,17 +139,35 @@ def patient_workspace(
             {"kind": "encounter", "id": row.id, "label": row.display_label},
         )
     latest = submissions[0] if submissions else None
+    legacy_profile = {
+        "sex": latest.sex,
+        "date_of_birth": latest.date_of_birth,
+        "operator_relationship": latest.operator_relationship,
+        "status": latest.status,
+        "notice_version": latest.notice_version,
+    } if latest else None
+    profile = legacy_profile
+    portal_profile = db.get(PortalProfile, patient_id)
+    if portal_profile:
+        consent = db.scalar(
+            select(PortalConsent).where(PortalConsent.patient_id == patient_id)
+            .order_by(PortalConsent.id.desc())
+        )
+        notice = db.get(PatientNoticeVersion, consent.notice_version_id) if consent else None
+        profile = {
+            "sex": portal_profile.sex,
+            "date_of_birth": portal_profile.date_of_birth,
+            "phone": portal_profile.phone,
+            "operator_relationship": portal_profile.operator_relationship,
+            "extra": portal_profile.extra,
+            "status": "enrolled",
+            "source": "portal",
+            "notice_version": notice.version if notice else None,
+        }
     return {
         "permissions": patient_permissions(db, patient_id, doctor),
-        "profile": {
-            "sex": latest.sex,
-            "date_of_birth": latest.date_of_birth,
-            "operator_relationship": latest.operator_relationship,
-            "status": latest.status,
-            "notice_version": latest.notice_version,
-        }
-        if latest
-        else None,
+        "profile": profile,
+        "legacy_profile": legacy_profile,
         "visits": [
             {"date": day or None, "records": records}
             for day, records in sorted(groups.items(), reverse=True)

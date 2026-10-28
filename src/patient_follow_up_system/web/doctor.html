@@ -5,6 +5,7 @@
   <link rel="stylesheet" href="/static/app.css?v=20260911-5">
   <link rel="stylesheet" href="/static/doctor-shell.css?v=20261028-shell-3">
   <link rel="stylesheet" href="/static/patient-workspace.css?v=20261024-workspace-1">
+  <link rel="stylesheet" href="/static/gastritis.css?v=20261028-gastritis-1">
   <link rel="stylesheet" href="/static/theme.css?v=20261028-theme-4">
   <script src="/static/accessibility.js?v=20261028-theme-4"></script>
 </head>
@@ -18,7 +19,7 @@
         <div id="patients" class="patient-name-list" role="group" aria-label="选择患者"></div>
       </aside>
       <section class="patient-detail-pane" aria-label="患者档案">
-        <header class="patient-detail-header"><div><p class="workspace-eyebrow">患者档案</p><h1 id="patientHeading">请选择患者</h1><p id="patientMeta" class="muted"></p></div><div class="row"><button id="showPatientQr" class="secondary" disabled>建档二维码 / 重印</button><button id="refreshPatient" class="secondary" disabled>刷新档案</button></div></header>
+        <header class="patient-detail-header"><div><p class="workspace-eyebrow">患者档案</p><h1 id="patientHeading">请选择患者</h1><p id="patientMeta" class="muted"></p></div><div class="row"><button id="showGastritis" class="secondary" disabled>慢性胃炎病情档案</button><button id="showPatientQr" class="secondary" disabled>建档二维码 / 重印</button><button id="refreshPatient" class="secondary" disabled>刷新档案</button></div></header>
         <div id="patientDetailScroll" tabindex="0" aria-label="就诊档案列表"><div class="patient-empty"><h2>从左侧选择患者</h2><p>每次就诊的病历与报告将在这里按日期展示。</p></div></div>
       </section>
     </section>
@@ -29,5 +30,12 @@
   </main>
   <dialog id="newPatientCard" class="doctor-modal hidden" aria-labelledby="newPatientTitle"><h2 id="newPatientTitle">新增患者</h2><form id="newPatientForm" class="form-grid"><label for="patientName">患者姓名</label><input id="patientName" required maxlength="100" placeholder="请输入医生确认的姓名"><p class="muted full-row">保存后从档案顶部打开专属建档二维码。</p><p id="newPatientError" class="status error hidden full-row" role="alert"></p><div class="row full-row"><button type="submit">保存患者</button><button type="button" class="secondary" id="cancelNewPatient">取消</button></div></form></dialog>
   <dialog id="inviteCard" class="doctor-modal hidden" aria-labelledby="qrTitle"><h2 id="qrTitle">患者专属建档二维码</h2><h3 id="qrPatientName"></h3><p>请妥善保管，可反复扫码阅读须知、填写信息和补交病历。</p><div id="qr" class="qr"></div><p id="expiry" class="muted"></p><p id="qrUrl" class="qr-url"></p><p class="muted">医生停用后，已打印的二维码也随即失效。</p><div class="row no-print"><a id="openInvite" class="buttonLink" target="_blank" rel="noreferrer">打开患者扫码页</a><button id="printInvite">打印二维码</button><button id="revokeInvite" class="secondary">停用二维码</button><button id="closeInvite" class="secondary">关闭</button></div></dialog>
-  <script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261028-shell-3"></script><script src="/static/doctor.js?v=20261027-team-3"></script>
+  <dialog id="gastritisDialog" class="gastritis-dialog" aria-labelledby="gastritisTitle">
+    <header class="gastritis-dialog-header"><h2 id="gastritisTitle">慢性胃炎与胃黏膜肠化病情档案</h2><button id="closeGastritis" type="button" class="secondary">关闭</button></header>
+    <div class="gastritis-dialog-body"><div class="gastritis-date-row"><label>记录日期<input id="gastritisDate" type="date" required></label><label>既往版本<select id="gastritisHistory"></select></label></div><div id="gastritisFields"></div>
+      <details class="gastritis-option-note"><summary>量表选项与计算口径确认</summary><p>症状共29项，未填写保留未知；分级1为偶有、程度较轻，2为时有、中等程度，3为经常、严重。慢性胃炎与胃黏膜肠化分别记录有、无、未知；既往史与幽门螺杆菌按原设计文档选项记录。</p><p>年龄按出生日期计算截至当天的周岁；BMI=体重(kg)÷身高(m)²，展示保留1位小数，不据此自动诊断或建议治疗。</p><p id="gastritisOptionState" class="muted"></p><label>负责医生确认说明（确认时必填）<input id="gastritisOptionNote" maxlength="1000" placeholder="请核对以上选项、分级与计算口径后填写确认意见"></label><button id="confirmGastritisOptions" type="button" class="secondary">确认量表口径并留存记录</button></details>
+      <p id="gastritisMessage" class="status" role="status" aria-live="polite"></p></div>
+    <footer class="gastritis-dialog-footer"><button id="saveGastritisDraft" type="button" class="secondary">保存草稿</button><button id="confirmGastritisRecord" type="button">医生确认并保存新版本</button></footer>
+  </dialog>
+  <script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261028-portal-1"></script><script src="/static/doctor.js?v=20261028-gastritis-1"></script><script src="/static/gastritis.js?v=20261028-gastritis-1"></script>
 </body></html>

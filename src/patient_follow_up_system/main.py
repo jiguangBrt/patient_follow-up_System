@@ -62,6 +62,8 @@ from patient_follow_up_system.permissions import (
     require_patient,
 )
 from patient_follow_up_system.team import router as team_router
+from patient_follow_up_system.portal import router as portal_router
+from patient_follow_up_system.gastritis import router as gastritis_router
 from patient_follow_up_system.web_pages import page_response
 
 load_dotenv()
@@ -77,6 +79,18 @@ app.include_router(accounts_router)
 app.include_router(team_router)
 app.include_router(patient_workspace_router)
 app.include_router(clinical_router)
+app.include_router(portal_router)
+app.include_router(gastritis_router)
+
+
+@app.middleware("http")
+async def private_portal_responses(request: Request, call_next):
+    response = await call_next(request)
+    path = request.scope.get("path", "")
+    if "/portal/" in path or "/gastritis" in path or "/doctor/enrollment-link" in path:
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+    return response
 
 
 class HealthResponse(BaseModel):

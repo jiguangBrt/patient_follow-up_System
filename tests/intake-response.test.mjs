@@ -4,11 +4,11 @@ import test from "node:test";
 import vm from "node:vm";
 
 const source = readFileSync(new URL("../src/patient_follow_up_system/web/intake.js", import.meta.url), "utf8");
-const helpers = source.slice(source.indexOf("async function request("), source.indexOf("function showReviewStatus("));
+const helpers = source.slice(source.indexOf("async function request("), source.indexOf("// End response helpers."));
 
 function client(status, body) {
   const context = vm.createContext({ AppPaths: { fetch: async () => new Response(body, { status }) } });
-  vm.runInContext(helpers, context);
+  vm.runInContext("let accessToken = null;\n" + helpers, context);
   return () => context.request("/intake-submissions", {});
 }
 
