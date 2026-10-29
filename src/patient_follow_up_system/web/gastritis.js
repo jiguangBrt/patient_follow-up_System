@@ -15,7 +15,7 @@
     const data = await schema(); container.replaceChildren(); const state = { sections: {}, symptoms: {}, entries: {} }; forms.set(container, state);
     container.classList.add("gastritis-form");
     for (const section of data.sections) {
-      const d = summary(section.label, ["past_history", "hp"].includes(section.key)); const grid = el("div", null, "gastritis-grid"); state.sections[section.key] = {};
+      const d = summary(section.label); d.dataset.section = section.key; const grid = el("div", null, "gastritis-grid"); state.sections[section.key] = {};
       for (const spec of section.fields) {
         const label = el(spec.kind === "checks" ? "div" : "label", spec.label); let control; const value = payload[section.key]?.[spec.key];
         if (spec.kind === "select") control = select(spec.options.map(x => [x, x]), value);
@@ -37,7 +37,7 @@
         }; Object.values(state.sections.basic).forEach(({ control }) => control.addEventListener("input", calculate)); calculate();
       }
     }
-    const symptoms = summary("基本病情", true); const symptomsHint = el("p", "分级：1 偶有、程度较轻；2 时有、中等程度；3 经常、严重。", "muted"); symptoms.append(symptomsHint);
+    const symptoms = summary("症状"); symptoms.dataset.section = "symptoms"; const symptomsHint = el("p", "分级：1 偶有、程度较轻；2 时有、中等程度；3 经常、严重。", "muted"); symptoms.append(symptomsHint);
     Object.entries(data.symptoms).forEach(([key, label]) => {
       const raw = payload.symptoms?.[key] || {}; const row = el("div", null, "gastritis-symptom"); const name = el("label", label); const presence = select([["unknown", "未知/待确认"], ["no", "无"], ["yes", "有"]], raw.presence); name.append(presence);
       const gradeLabel = el("label", "程度"); const grade = select([["", "待填写"], ["1", "1 偶有、程度较轻"], ["2", "2 时有、中等程度"], ["3", "3 经常、严重"]], raw.grade == null ? "" : String(raw.grade)); gradeLabel.append(grade);
@@ -48,7 +48,7 @@
       const toggle = () => { const active = presence.value === "yes"; gradeLabel.hidden = detailLabel.hidden = !active; grade.disabled = detail.disabled = !active; Object.values(extras).forEach(({ control, label }) => { label.hidden = !active; control.disabled = !active; }); }; presence.onchange = toggle; toggle(); row.append(name, gradeLabel, ...Object.values(extras).map(x => x.label), detailLabel); symptoms.append(row); state.symptoms[key] = { presence, grade, detail, extras };
     });
     const otherLabel = el("label", "其他症状及程度（选填）"); const other = el("textarea"); other.maxLength = 3000; other.value = payload.other_symptoms || ""; otherLabel.append(other); symptoms.append(otherLabel); state.other = other;
-    container.insertBefore(symptoms, container.querySelectorAll("details")[3]);
+    container.insertBefore(symptoms, container.querySelector('[data-section="past_history"]'));
     const hp = state.sections.hp; const hpToggle = () => { const active = hp.infection.control.value !== "无"; ["count", "last_infection", "treated", "retest"].forEach(k => { hp[k].label.hidden = !active; hp[k].control.disabled = !active; }); }; hp.infection.control.onchange = hpToggle; hpToggle();
     const lifestyle = state.sections.lifestyle; const lifeToggle = () => {
       const smoke = lifestyle.smoking.control.value; const drink = lifestyle.drinking.control.value;
@@ -56,12 +56,28 @@
       ["drinking_frequency", "alcohol_amount", "drinking_years", "quit_drinking_on"].forEach(k => { const active = ["近期戒酒", "偶尔", "经常"].includes(drink) && (k !== "quit_drinking_on" || drink === "近期戒酒"); lifestyle[k].label.hidden = !active; lifestyle[k].control.disabled = !active; });
     }; lifestyle.smoking.control.onchange = lifestyle.drinking.control.onchange = lifeToggle; lifeToggle();
     for (const [key, title] of [["diagnoses", "诊断记录"], ["medications", "治疗用药"], ["lab_results", "关键检验指标"]]) {
-      const section = summary(title); const list = el("div"); state.entries[key] = [];
+      const section = summary(title); section.dataset.section = key; const list = el("div"); state.entries[key] = [];
       const add = raw => { const row = el("div", null, "gastritis-entry"); const controls = {};
         for (const [k, label] of [["date", "日期"], ["name", "名称"], ["value", key === "medications" ? "剂量、疗程等" : "结果或补充"], ["source", "来源（报告/就诊/资料编号）"]]) { const l = el("label", label); const input = el("input"); input.type = k === "date" ? "date" : "text"; input.value = raw?.[k] || ""; input.maxLength = k === "source" ? 300 : k === "name" ? 200 : 500; l.append(input); row.append(l); controls[k] = input; }
         const remove = el("button", "删除本行", "secondary"); remove.type = "button"; const item = { controls, row }; remove.onclick = () => { state.entries[key] = state.entries[key].filter(x => x !== item); row.remove(); }; row.append(remove); list.append(row); state.entries[key].push(item);
       }; (payload[key] || []).forEach(add); const button = el("button", `＋ 添加${title}`, "secondary"); button.type = "button"; button.onclick = () => add(); section.append(list, button); container.append(section);
     }
+    const groups = [["symptoms", "基本病情", ["symptoms"]], ["history", "既往病史", ["past_history", "hp"]], ["personal", "个人信息", ["basic", "lifestyle"]], ["clinical", "诊疗记录", ["diagnoses", "medications", "lab_results"]]];
+    const sections = [...container.children]; const nav = el("div", null, "gastritis-tabs"); nav.setAttribute("role", "tablist"); nav.setAttribute("aria-label", "档案分类");
+    const tabs = []; const panels = []; const prefix = container.id || "gastritis";
+    function activate(index, expand = true) {
+      tabs.forEach((tab, i) => { tab.setAttribute("aria-selected", String(i === index)); tab.tabIndex = i === index ? 0 : -1; panels[i].hidden = i !== index; });
+      if (expand) { const first = panels[index].querySelector("details"); if (first) first.open = true; }
+    }
+    groups.forEach(([key, title, keys], index) => {
+      const tab = el("button", title); tab.type = "button"; tab.id = `${prefix}-tab-${key}`; tab.setAttribute("role", "tab"); tab.setAttribute("aria-controls", `${prefix}-panel-${key}`);
+      const panel = el("div", null, "gastritis-panel"); panel.id = `${prefix}-panel-${key}`; panel.setAttribute("role", "tabpanel"); panel.setAttribute("aria-labelledby", tab.id);
+      sections.filter(section => keys.includes(section.dataset.section)).forEach(section => panel.append(section));
+      tab.onclick = () => activate(index); tab.onkeydown = event => { const next = event.key === "ArrowRight" ? (index + 1) % groups.length : event.key === "ArrowLeft" ? (index + groups.length - 1) % groups.length : event.key === "Home" ? 0 : event.key === "End" ? groups.length - 1 : null; if (next != null) { event.preventDefault(); activate(next); tabs[next].focus(); } };
+      tabs.push(tab); panels.push(panel); nav.append(tab);
+    });
+    container.replaceChildren(nav, ...panels); activate(0, false);
+    container.querySelectorAll("input,select,textarea").forEach(control => control.addEventListener("invalid", () => { const index = panels.findIndex(panel => panel.contains(control)); if (index >= 0) activate(index); const section = control.closest("details"); if (section) section.open = true; }));
     return { read: () => read(container) };
   }
   function read(container) {

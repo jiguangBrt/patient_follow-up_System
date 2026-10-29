@@ -65,7 +65,7 @@ async function loadHealth(sequence){
     const row=document.createElement("div");row.className="portal-card";const title=document.createElement("p");
     title.textContent=`${record.recorded_on} · 第 ${record.version} 版 · ${record.status==="confirmed"?"医生已核对":record.source==="patient"?"患者自述 / 待核对":"医生草稿 / 待核对"}`;
     const button=document.createElement("button");button.type="button";button.className="secondary";button.textContent="查看本次记录";
-    button.onclick=async()=>{try{await GastritisForms.render($("recordDetail"),record.payload,{patient:true,readonly:true});$("recordDetail").querySelectorAll("input,select,textarea,button").forEach(el=>el.disabled=true);$("recordDialog").showModal();}catch(error){status(error.message,true);}};
+    button.onclick=async()=>{try{await GastritisForms.render($("recordDetail"),record.payload,{patient:true,readonly:true});$("recordDetail").querySelectorAll("input,select,textarea,button:not([role=tab])").forEach(el=>el.disabled=true);$("recordDialog").showModal();}catch(error){status(error.message,true);}};
     row.append(title,button);$("healthHistory").append(row);
   });
 }

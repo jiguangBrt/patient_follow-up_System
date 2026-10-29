@@ -18,7 +18,7 @@ from patient_follow_up_system.portal import get_portal_patient
 from patient_follow_up_system.portal_models import PortalProfile
 
 router = APIRouter()
-SCHEMA_VERSION = "gastritis-20261028-v1"
+SCHEMA_VERSION = "gastritis-20261029-v2"
 TRISTATE = ["未知/待确认", "有", "无"]
 SYMPTOMS = dict(zip(
     ["weight_loss", "fullness", "stomach_pain", "rib_discomfort", "cold_stomach", "worse_after_meals", "better_after_meals", "worse_with_emotion", "nausea", "vomiting", "acid_reflux", "heartburn", "belching", "bitter_mouth", "dry_mouth", "sticky_mouth", "bad_breath", "tasteless_mouth", "dry_stool", "loose_stool", "sticky_stool", "weak_defecation", "poor_appetite", "sighing", "chest_tightness", "low_mood", "fatigue", "cold_extremities", "throat_discomfort"],
@@ -37,7 +37,6 @@ def field(key, label, kind="text", options=None, **kwargs):
 SECTIONS = [
     {"key": "basic", "label": "基本信息", "fields": [field("name", "姓名"), field("sex", "性别", "select", ["未说明", "男", "女"]), field("date_of_birth", "出生日期", "date"), field("phone", "手机号"), field("height_cm", "身高（cm）", "number", min=30, max=250), field("weight_kg", "体重（kg）", "number", min=1, max=400), field("ethnicity", "民族"), field("occupation", "职业"), field("education", "文化程度", "select", ["未填写", "小学及以下", "初中", "高中/中专", "大专", "本科", "研究生及以上"]), field("region", "居住地区")]},
     {"key": "lifestyle", "label": "生活方式", "fields": [field("smoking", "吸烟", "select", ["未知/待确认", "从不", "既往吸烟", "当前吸烟"]), field("cigarettes_per_day", "每日吸烟支数", "number", min=0, max=200), field("smoking_years", "吸烟年数", "number", min=0, max=120), field("quit_smoking_on", "戒烟时间", "date"), field("drinking", "饮酒", "select", ["未知/待确认", "从不饮酒", "近期戒酒", "偶尔", "经常"]), field("drinking_frequency", "饮酒频率", "select", ["未知/待确认", "几乎每天", "每周3-5次", "每周1-2次", "每月1-2次", "更少"]), field("alcohol_amount", "每次饮酒量（含单位）"), field("drinking_years", "饮酒年数", "number", min=0, max=120), field("quit_drinking_on", "戒酒时间", "date"), field("diet", "饮食习惯", "checks", ["辛辣", "高盐", "腌制", "烧烤烟熏", "清淡", "新鲜蔬菜水果", "素食", "夜宵", "不吃早餐", "咖啡", "茶"]), field("sleep", "睡眠质量", "select", ["未知/待确认", "质量佳", "一般", "差"])]},
-    {"key": "gastroscopy", "label": "胃镜与病理", "fields": [field("chronic_gastritis", "慢性胃炎", "select", TRISTATE), field("intestinal_metaplasia", "胃黏膜肠化", "select", TRISTATE), field("exam_date", "胃镜报告日期", "date"), field("hospital", "医院"), field("endoscopy_diagnosis", "胃镜诊断", "textarea"), field("pathology_site", "病理部位"), field("pathology_diagnosis", "病理诊断", "textarea"), field("source", "报告来源（可填资料编号）")]},
     {"key": "past_history", "label": "既往病史", "fields": [field("overall", "既往病史情况", "select", ["未知/待确认", "有", "明确无"]), field("conditions", "既往疾病", "checks", HISTORY), field("detail", "其他病史、诊断或建议", "textarea"), field("source", "病史来源（可填资料编号）")]},
     {"key": "hp", "label": "幽门螺杆菌感染病史", "fields": [field("infection", "既往感染", "select", TRISTATE), field("count", "既往感染次数", "select", ["未知/待确认", "1次", "2次", "2次以上"]), field("last_infection", "最近一次感染时间", "select", ["未知/待确认", "1年前", "1年内"]), field("treated", "是否治疗", "select", ["未知/待确认", "是", "否"]), field("retest", "杀菌治疗后复查", "select", ["未知/待确认", "已转阴", "复查未转阴", "未复查"]), field("source", "检验、检查来源（可填资料编号）")]},
 ]

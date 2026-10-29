@@ -15,7 +15,7 @@ def archive(request):
 
 
 def payload(**changes):
-    return {"recorded_on": date.today().isoformat(), "payload": {"gastroscopy": {"chronic_gastritis": "有", "intestinal_metaplasia": "未知/待确认"}, "symptoms": {"nausea": {"presence": "unknown"}, "stomach_pain": {"presence": "yes", "grade": 2, "pain_type": "灼痛"}}, **changes}}
+    return {"recorded_on": date.today().isoformat(), "payload": {"hp": {"infection": "未知/待确认"}, "symptoms": {"nausea": {"presence": "unknown"}, "stomach_pain": {"presence": "yes", "grade": 2, "pain_type": "灼痛"}}, **changes}}
 
 
 def test_records_keep_versions_and_unknown_distinct_from_no(archive):
@@ -24,15 +24,15 @@ def test_records_keep_versions_and_unknown_distinct_from_no(archive):
     first = client.post(path, headers=doctor, json=payload())
     assert first.status_code == 201, first.text
     assert first.headers["cache-control"] == "no-store"
-    second_payload = payload(gastroscopy={"chronic_gastritis": "有", "intestinal_metaplasia": "无"})
+    second_payload = payload(hp={"infection": "无"})
     second = client.post(path, headers=doctor, json=second_payload)
     assert second.status_code == 201
     history = client.get(path, headers=doctor)
     assert history.headers["cache-control"] == "no-store"
     records = history.json()["records"]
     assert [r["version"] for r in records] == [2, 1]
-    assert records[0]["payload"]["gastroscopy"]["intestinal_metaplasia"] == "无"
-    assert records[1]["payload"]["gastroscopy"]["intestinal_metaplasia"] == "未知/待确认"
+    assert records[0]["payload"]["hp"]["infection"] == "无"
+    assert records[1]["payload"]["hp"]["infection"] == "未知/待确认"
     assert records[1]["payload"]["symptoms"]["nausea"]["presence"] == "unknown"
     assert client.get(path, headers=auth(client, "other_doctor")).status_code == 404
     assert client.post(path, headers=auth(client, "other_doctor"), json=payload()).status_code == 404
@@ -73,7 +73,7 @@ def test_rejects_contradictions_and_invalid_clinical_entries(changes):
         RecordRequest.model_validate(payload(**changes))
 
 
-def test_all_six_categories_and_dated_clinical_sources_round_trip(archive):
+def test_active_categories_and_dated_clinical_sources_round_trip(archive):
     client, _, ids, doctor = archive
     clinical = {"date": date.today().isoformat(), "name": "虚构条目", "value": "仅用于测试", "source": "虚构报告1"}
     data = payload(basic={"height_cm": 170, "weight_kg": 60}, lifestyle={"smoking": "从不", "diet": ["清淡"]}, past_history={"overall": "有", "conditions": ["脂肪肝"], "source": "虚构病历"}, hp={"infection": "有", "count": "1次", "treated": "是", "retest": "已转阴"}, diagnoses=[clinical], medications=[clinical], lab_results=[clinical])
@@ -84,7 +84,11 @@ def test_all_six_categories_and_dated_clinical_sources_round_trip(archive):
     for key, value in data["payload"].items():
         if key != "symptoms":
             assert saved[key] == value
-    assert len(client.get("/gastritis/schema").json()["symptoms"]) == 29
+    schema = client.get("/gastritis/schema").json()
+    assert len(schema["symptoms"]) == 29
+    assert "gastroscopy" not in {section["key"] for section in schema["sections"]}
+    assert "gastroscopy" not in saved
+    assert client.post(path, headers=doctor, json=payload(gastroscopy={})).status_code == 422
 
 
 def test_student_view_edit_review_are_separate(archive):
