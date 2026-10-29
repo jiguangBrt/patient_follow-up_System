@@ -32,11 +32,10 @@ async function notice(){
 }
 function setProfile(data){
   profile=data.profile||{};const patient=data.patient||{};
-  $("displayName").value=profile.display_name||patient.display_name||"";$("sex").value=profile.sex||"未说明";
+  $("displayName").value=entry.locked_name||profile.display_name||patient.display_name||"";$("displayName").readOnly=Boolean(entry.locked_name);$("sex").value=profile.sex||"未说明";
   $("dateOfBirth").value=profile.date_of_birth||"";$("phone").value=profile.phone||"";$("relationship").value=profile.operator_relationship||"本人";
-  $("doctorName").textContent=`${data.doctor_name||entry.doctor_name}医生团队`;
   $("welcomeName").textContent=`${patient.display_name||profile.display_name||"您"}，您好`;
-  $("profileHelp").textContent="基本信息已保存，可在此修改。";$("saveProfile").textContent="保存基本信息";
+  $("profileHelp").textContent="";$("saveProfile").textContent="保存基本信息";
   $("registerConsentRow").classList.add("hidden");$("registerConsent").required=false;$("deviceSection").classList.remove("hidden");
 }
 async function go(name){
@@ -96,7 +95,7 @@ $("profileForm").onsubmit=async event=>{
   event.preventDefault();let success=false;
   await busy($("saveProfile"),async()=>{
     if(recoveryRequired)throw new Error("请联系医生核实身份并获取个人恢复二维码，避免重复建档。");
-    const body={display_name:$("displayName").value.trim(),sex:$("sex").value,date_of_birth:$("dateOfBirth").value,phone:$("phone").value.trim()||null,operator_relationship:$("relationship").value};
+    const body={display_name:entry.locked_name||$("displayName").value.trim(),sex:$("sex").value,date_of_birth:$("dateOfBirth").value,phone:$("phone").value.trim()||null,operator_relationship:$("relationship").value};
     let data;
     if(accessToken)data=await request("/portal/me",body,"PUT");
     else{
@@ -105,12 +104,12 @@ $("profileForm").onsubmit=async event=>{
       data=await request("/portal/register",{...body,intake_token:intakeToken,registration_key:registrationKey,notice_version_id:currentNotice.id,consent_given:true},"POST",false);
       accessToken=data.access_token;storageSet(privateKey(),accessToken);storageRemove(`${privateKey()}:recovery`);recoveryRequired=false;
     }
-    setProfile(data);status(storageWarning?"已保存。本浏览器限制本机存储，请保持本页面打开；关闭后可能需要联系医生恢复访问。":"基本信息已保存，已加入医生随访名单。");success=true;
+    setProfile(data);status(storageWarning?"已保存。本浏览器限制本机存储，请保持本页面打开；关闭后可能需要联系医生恢复访问。":"");success=true;
   });if(success)await go("home");
 };
 $("healthForm").onsubmit=async event=>{event.preventDefault();let success=false;await busy($("saveHealth"),async()=>{
   if(!formController)throw new Error("健康档案尚未加载，请稍后重试。");
-  await request("/portal/gastritis-records",{recorded_on:$("healthDate").value,payload:formController.read()});status("本次健康档案已保存，供医生核对。");success=true;
+  await request("/portal/gastritis-records",{recorded_on:$("healthDate").value,payload:formController.read()});status("已保存");success=true;
 });if(success)await go("health");};
 $("uploadForm").onsubmit=async event=>{event.preventDefault();let success=false;await busy($("uploadButton"),async()=>{
   if(!$("uploadConsent").checked)throw new Error("请先阅读并同意患者须知。");const file=$("document").files[0];
@@ -118,7 +117,7 @@ $("uploadForm").onsubmit=async event=>{event.preventDefault();let success=false;
   if(!["image/jpeg","image/png","application/pdf"].includes(file.type))throw new Error("请选择 JPG、PNG 或 PDF 文件。");
   const bytes=new Uint8Array(await file.arrayBuffer());let binary="";for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
   await request("/portal/documents",{event_date:$("eventDate").value,display_label:$("recordType").value,patient_note:$("patientNote").value.trim()||null,submission_key:uploadKey,notice_version_id:currentNotice.id,consent_given:true,document_name:file.name,document_mime_type:file.type,document_base64:btoa(binary)});
-  $("uploadForm").reset();clearPreview();uploadKey=null;status("诊疗资料已保存，可在诊疗记录中查看。");success=true;
+  $("uploadForm").reset();clearPreview();uploadKey=null;status("上传成功");success=true;
 });if(success)await go("records");};
 function clearPreview(){if(previewUrl)URL.revokeObjectURL(previewUrl);previewUrl=null;$("preview").classList.add("hidden");$("preview").removeAttribute("src");}
 $("document").onchange=()=>{clearPreview();uploadKey=randomKey();const file=$("document").files[0];$("fileName").textContent=file?`${file.name} · ${(file.size/1024/1024).toFixed(1)} MB`:"支持 JPG、PNG、PDF，每份不超过 8 MB。";if(file&&file.type.startsWith("image/")){previewUrl=URL.createObjectURL(file);$("preview").src=previewUrl;$("preview").classList.remove("hidden");}};
@@ -129,7 +128,9 @@ $("closeNotice").onclick=()=>$("noticeDialog").close();$("closeRecord").onclick=
 async function init(){
   try{
     if(!intakeToken)throw new Error("请扫描医生提供的建档二维码进入。");
-    entry=await request("/portal/entry",{intake_token:intakeToken},"POST",false);$("doctorName").textContent=`${entry.doctor_name}医生团队`;
+    entry=await request("/portal/entry",{intake_token:intakeToken},"POST",false);
+    $("displayName").value=entry.locked_name||"";
+    $("displayName").readOnly=Boolean(entry.locked_name);
     await notice();accessToken=storageGet(privateKey());
     if(accessToken){try{const me=await request("/portal/me",undefined,"GET");
       if(entry.kind==="patient" && entry.target_binding!==me.target_binding){recoveryRequired=true;$("profileForm").classList.add("hidden");$("deviceSection").classList.remove("hidden");$("profileHelp").textContent="此二维码与本机已保存的档案不同。请先退出本机访问，再确认使用的是本人二维码。";status("二维码与本机档案不同，未打开任何患者资料。",true);await go("me");return;}
@@ -140,7 +141,7 @@ async function init(){
       status("本机访问已失效，请联系医生获取个人恢复二维码。",true);
     }else{
       recoveryRequired=false;$("profileForm").classList.remove("hidden");
-      if(entry.kind==="patient"){$("profileHelp").textContent="您正在使用个人二维码。请核对本人基本信息，保存后恢复访问原有档案。";$("saveProfile").textContent="核对并进入个人档案";}
+      if(entry.kind==="patient"){$("profileHelp").textContent="";$("saveProfile").textContent="保存并进入档案";}
       status(needsRecovery?"请核对本人信息，使用此个人二维码恢复访问。":"请先完善基本信息。");
     }
     await go("me");

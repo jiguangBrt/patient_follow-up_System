@@ -14,7 +14,6 @@
   async function render(container, payload = {}) {
     const data = await schema(); container.replaceChildren(); const state = { sections: {}, symptoms: {}, entries: {} }; forms.set(container, state);
     container.classList.add("gastritis-form");
-    const note = el("p", "未填写和未识别均保留为未知/待确认。患者填写属于自述，由医生核对后确认。", "muted"); container.append(note);
     for (const section of data.sections) {
       const d = summary(section.label, ["past_history", "hp"].includes(section.key)); const grid = el("div", null, "gastritis-grid"); state.sections[section.key] = {};
       for (const spec of section.fields) {
@@ -96,7 +95,7 @@
       document.getElementById("confirmGastritisOptions").hidden = AppSession.staffRole() !== "doctor";
       document.getElementById("saveGastritisDraft").hidden = !patientPermissions.includes("edit"); document.getElementById("confirmGastritisRecord").hidden = !patientPermissions.includes("review"); document.getElementById("saveGastritisDraft").disabled = !patientPermissions.includes("edit"); document.getElementById("confirmGastritisRecord").disabled = !patientPermissions.includes("review");
     }
-    button.onclick = async () => { patientId = button.dataset.patientId; if (!patientId) return; patientPermissions = (button.dataset.permissions || "").split(","); dialog.showModal(); report("正在加载…"); try { await load(); report("每次保存均新增版本，既往记录保留。"); } catch (e) { report(e.message, true); } };
+    button.onclick = async () => { patientId = button.dataset.patientId; if (!patientId) return; patientPermissions = (button.dataset.permissions || "").split(","); dialog.showModal(); report("正在加载…"); try { await load(); report(""); } catch (e) { report(e.message, true); } };
     document.getElementById("closeGastritis").onclick = () => dialog.close(); dialog.addEventListener("close", () => { requestEpoch++; });
     async function save(recordStatus) { const buttons = [document.getElementById("saveGastritisDraft"), document.getElementById("confirmGastritisRecord")]; buttons.forEach(b => b.disabled = true); try { await request(`/patients/${patientId}/gastritis-records`, { method: "POST", body: JSON.stringify({ recorded_on: document.getElementById("gastritisDate").value, payload: read(container), status: recordStatus }) }); await load(); report(recordStatus === "confirmed" ? "已确认并保存新版本" : "草稿已保存为新版本"); } catch (e) { report(e.message, true); } finally { buttons[0].disabled = !patientPermissions.includes("edit"); buttons[1].disabled = !patientPermissions.includes("review"); } }
     document.getElementById("saveGastritisDraft").onclick = () => save("draft"); document.getElementById("confirmGastritisRecord").onclick = () => save("confirmed");

@@ -65,5 +65,22 @@ test('personal QR permits recovery after expired bearer and clears marker only a
  await ui.element('profileForm').onsubmit({preventDefault(){}});assert.equal(registrations,1);assert.equal(ui.local.get(prefix+':recovery'),undefined);assert.equal(ui.local.get(prefix),'recovered');assert.equal(ui.element('pageTitle').textContent,'首页');
 });
 test('persistent recovery marker accepts a new personal QR without stale private bearer',async()=>{
- const ui=setup({stored:{[prefix+':recovery']:'required'},fetcher:initializationFetcher({kind:'patient',binding:'A'})});await ui.run('init()');assert.equal(ui.run('recoveryRequired'),false);assert.equal(ui.element('profileForm').classList.contains('hidden'),false);assert.match(ui.element('profileHelp').textContent,/恢复访问原有档案/);
+ const ui=setup({stored:{[prefix+':recovery']:'required'},fetcher:initializationFetcher({kind:'patient',binding:'A'})});await ui.run('init()');assert.equal(ui.run('recoveryRequired'),false);assert.equal(ui.element('profileForm').classList.contains('hidden'),false);assert.equal(ui.element('saveProfile').textContent,'保存并进入档案');
+});
+
+test('personal QR prefills and locks doctor-set name through registration and profile reload',async()=>{
+ const base=initializationFetcher({kind:'patient',binding:'A'});let submitted;
+ const ui=setup({fetcher:async(path,options)=>{
+  if(path==='/portal/entry')return new Response(JSON.stringify({doctor_id:7,kind:'patient',target_binding:'A',locked_name:'医生设定姓名'}));
+  if(path==='/portal/register'){submitted=JSON.parse(options.body);return new Response(JSON.stringify({access_token:'private',patient:{display_name:'医生设定姓名'},profile:{},target_binding:'A'}));}
+  return base(path,options);
+ }});
+ await ui.run('init()');assert.equal(ui.element('displayName').value,'医生设定姓名');assert.equal(ui.element('displayName').readOnly,true);
+ ui.element('displayName').value='浏览器自动填入其他姓名';ui.element('registerConsent').checked=true;
+ await ui.element('profileForm').onsubmit({preventDefault(){}});
+ assert.equal(submitted.display_name,'医生设定姓名');assert.equal(ui.element('displayName').value,'医生设定姓名');assert.equal(ui.element('status').textContent,'');assert.equal(ui.element('pageTitle').textContent,'首页');
+});
+
+test('public QR keeps name editable without a prefilled patient',async()=>{
+ const ui=setup({fetcher:initializationFetcher()});await ui.run('init()');assert.equal(ui.element('displayName').value,'');assert.equal(ui.element('displayName').readOnly,false);
 });
