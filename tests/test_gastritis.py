@@ -39,21 +39,20 @@ def test_records_keep_versions_and_unknown_distinct_from_no(archive):
     assert client.get(path, headers=auth(client, "patient")).status_code == 403
 
 
-def test_only_doctor_can_confirm_options_and_confirmation_has_provenance(archive):
+def test_doctor_can_confirm_record_without_options_gate_and_retired_endpoint_is_gone(archive):
     client, _, ids, doctor = archive
     path = f'/patients/{ids["patient_record"]}/gastritis-records'
     data = payload() | {"status": "confirmed"}
-    assert client.post(path, headers=doctor, json=data).status_code == 409
     confirmation = {"schema_version": SCHEMA_VERSION, "note": "虚构测试：核对量表29症状、三级含义及周岁/BMI计算口径"}
-    assert client.post("/doctor/gastritis-options/confirm", headers=auth(client, "patient"), json=confirmation).status_code == 403
-    assert client.post("/doctor/gastritis-options/confirm", headers=doctor, json=confirmation).status_code == 200
+    assert client.post("/doctor/gastritis-options/confirm", headers=auth(client, "patient"), json=confirmation).status_code == 404
+    assert client.post("/doctor/gastritis-options/confirm", headers=doctor, json=confirmation).status_code == 404
     result = client.post(path, headers=doctor, json=data)
     assert result.status_code == 201, result.text
     record = result.json()
     assert record["status"] == "confirmed"
     assert record["confirmed_by_id"] == ids["doctor"]
     assert record["confirmed_at"] and record["created_by_id"] == ids["doctor"]
-    assert client.get(path, headers=doctor).json()["option_confirmation"]["note"] == confirmation["note"]
+    assert "option_confirmation" not in client.get(path, headers=doctor).json()
 
 
 @pytest.mark.parametrize("changes", [
@@ -106,11 +105,10 @@ def test_student_view_edit_review_are_separate(archive):
     assert client.post("/doctor/student-permissions", headers=doctor, json=permission | {"can_edit": True}).status_code in (200, 201)
     assert client.post(path, headers=student, json=payload()).status_code == 201
     assert client.post(path, headers=student, json=payload() | {"status": "confirmed"}).status_code == 404
-    assert client.post("/doctor/gastritis-options/confirm", headers=doctor, json={"schema_version": SCHEMA_VERSION, "note": "核对测试口径"}).status_code == 200
     assert client.post("/doctor/student-permissions", headers=doctor, json=permission | {"can_review": True}).status_code in (200, 201)
     confirmed = client.post(path, headers=student, json=payload() | {"status": "confirmed"})
     assert confirmed.status_code == 201, confirmed.text
-    assert client.post("/doctor/gastritis-options/confirm", headers=student, json={"schema_version": SCHEMA_VERSION, "note": "不应允许"}).status_code == 403
+    assert client.post("/doctor/gastritis-options/confirm", headers=student, json={"schema_version": SCHEMA_VERSION, "note": "不应允许"}).status_code == 404
 
 
 def test_initial_profile_prefills_only_allowed_fields_and_never_overwrites_versions(archive):

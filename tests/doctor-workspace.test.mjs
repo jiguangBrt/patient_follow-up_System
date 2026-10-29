@@ -39,6 +39,13 @@ async function setup(override={}) {
 }
 function texts(root,tag){return root.children.flatMap(child=>[...(child.tag===tag?[child.textContent]:[]),...texts(child,tag)]);}
 
+test("patient metadata contains only sex, birth date, relationship and phone",async()=>{
+  const data={...workspace(),profile:{sex:"女",date_of_birth:"1992-10-02",operator_relationship:"本人",phone:"13800000000",status:"enrolled"}};
+  const {$,sandbox,setResolver}=await setup({resolve:()=>data});
+  assert.equal($("patientMeta").textContent,"女 · 1992-10-2 · 本人 · 13800000000");
+  setResolver(()=>workspace());await sandbox.selectPatient(2);assert.equal($("patientMeta").textContent,"");
+});
+
 test("patient names switch the large workspace without changing URL or expanding rows",async()=>{
   const {$,location}=await setup();const before=location.href;
   assert.equal($("patients").children.length,2);

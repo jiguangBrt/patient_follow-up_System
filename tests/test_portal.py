@@ -29,6 +29,20 @@ def enroll(client, identities, key="a" * 40):
     return link, data, {"Authorization": "Bearer " + data["access_token"]}
 
 
+def test_patient_report_cannot_become_confirmed_when_options_workflow_is_removed(portal_app):
+    client, sessions, ids, current = portal_app
+    _, data, headers = enroll(client, ids)
+    request = {"recorded_on": now_utc().date().isoformat(), "payload": {"hp": {"infection": "未知/待确认"}}, "status": "confirmed"}
+    assert client.post("/portal/gastritis-records", headers=headers, json=request).status_code == 403
+    assert client.get("/portal/gastritis-records", headers=headers).json()["records"] == []
+    result = client.post("/portal/gastritis-records", headers=headers, json=request | {"status": "draft"})
+    assert result.status_code == 201, result.text
+    assert result.json()["status"] == "draft"
+    assert result.json()["confirmed_at"] is None and result.json()["confirmed_by_id"] is None
+    assert "option_confirmation" not in client.get("/portal/gastritis-records", headers=headers).json()
+    assert client.post("/doctor/gastritis-options/confirm", headers=headers, json={"schema_version": "retired", "note": "obsolete"}).status_code == 404
+
+
 def test_public_qr_stable_auto_enrollment_and_no_patient_disclosure(portal_app):
     client, sessions, ids, current = portal_app
     link, data, headers = enroll(client, ids)

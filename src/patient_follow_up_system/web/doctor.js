@@ -61,13 +61,14 @@ async function selectPatient(id) {
   const patient=doctorPatients.find(p=>p.id===id);if(!patient)return;
   $("showGastritis").disabled=true;$("showGastritis").dataset.patientId="";const changed=selectedPatientId!==id;selectedPatientId=id;const epoch=++selectionEpoch;
   AppPaths.storage.setItem(`selectedPatient:${doctorId}`,String(id));closeModal("inviteCard");currentInvitationId=null;renderPatients();
-  $("patientHeading").textContent=patient.display_name;$("patientMeta").textContent=patient.patient_code;$("showPatientQr").disabled=false;$("refreshPatient").disabled=false;
+  $("patientHeading").textContent=patient.display_name;$("patientMeta").textContent="";$("showPatientQr").disabled=false;$("refreshPatient").disabled=false;
   const pane=$("patientDetailScroll");const position=changed?0:pane.scrollTop;pane.replaceChildren(node("p","正在加载患者资料…","muted"));
   try {
     const data=await api(`/patients/${id}/workspace`);if(epoch!==selectionEpoch||selectedPatientId!==id)return;
     patientPermissions=data.permissions||(isStudent?[]:["view","edit","review"]);
     $("showGastritis").dataset.patientId=String(id);$("showGastritis").dataset.permissions=patientPermissions.join(",");$("showGastritis").disabled=false;const profile=data.profile;
-    $("patientMeta").textContent=profile?`${patient.patient_code} · ${profile.sex} · 生日 ${profile.date_of_birth} · 操作员 ${profile.operator_relationship}${profile.phone?` · 电话 ${profile.phone}`:""}`:`${patient.patient_code} · 尚未提交基本信息`;
+    const birth=profile?.date_of_birth?profile.date_of_birth.split("-").map(Number).join("-"):"";
+    $("patientMeta").textContent=profile?[profile.sex,birth,profile.operator_relationship,profile.phone].filter(Boolean).join(" · "):"";
     pane.replaceChildren();
     const overview=node("div",null,"patient-overview");overview.append(node("span",profile?`建档状态：${stateNames[profile.status]||profile.status} · 须知版本 ${profile.notice_version||"未记录"}`:"患者扫码后可填写基本信息并补交病历。"));
     if(isStudent)overview.append(node("span",`我的权限：${patientPermissions.map(p=>({view:"查看",edit:"录入",review:"审核"})[p]).join("、")} · 到期或撤销后失效`));

@@ -5,7 +5,7 @@
   <link rel="stylesheet" href="/static/app.css?v=20260911-5">
   <link rel="stylesheet" href="/static/doctor-shell.css?v=20261028-shell-3">
   <link rel="stylesheet" href="/static/patient-workspace.css?v=20261024-workspace-1">
-  <link rel="stylesheet" href="/static/gastritis.css?v=20261029-gastritis-3">
+  <link rel="stylesheet" href="/static/gastritis.css?v=20261029-gastritis-4">
   <link rel="stylesheet" href="/static/theme.css?v=20261028-theme-4">
   <script src="/static/accessibility.js?v=20261028-theme-4"></script>
 </head>
@@ -33,9 +33,8 @@
   <dialog id="gastritisDialog" class="gastritis-dialog" aria-labelledby="gastritisTitle">
     <header class="gastritis-dialog-header"><h2 id="gastritisTitle">慢性胃炎与胃黏膜肠化病情档案</h2><button id="closeGastritis" type="button" class="secondary">关闭</button></header>
     <div class="gastritis-dialog-body"><div class="gastritis-date-row"><label>记录日期<input id="gastritisDate" type="date" required></label><label>既往版本<select id="gastritisHistory"></select></label></div><div id="gastritisFields"></div>
-      <details class="gastritis-option-note"><summary>量表选项与计算口径确认</summary><p>症状共29项，未填写保留未知；分级1为偶有、程度较轻，2为时有、中等程度，3为经常、严重。既往史与幽门螺杆菌按原设计文档选项记录。</p><p>年龄按出生日期计算截至当天的周岁；BMI=体重(kg)÷身高(m)²，展示保留1位小数，不据此自动诊断或建议治疗。</p><p id="gastritisOptionState" class="muted"></p><label>负责医生确认说明（确认时必填）<input id="gastritisOptionNote" maxlength="1000" placeholder="请核对以上选项、分级与计算口径后填写确认意见"></label><button id="confirmGastritisOptions" type="button" class="secondary">确认量表口径并留存记录</button></details>
       <p id="gastritisMessage" class="status" role="status" aria-live="polite"></p></div>
     <footer class="gastritis-dialog-footer"><button id="saveGastritisDraft" type="button" class="secondary">保存草稿</button><button id="confirmGastritisRecord" type="button">医生确认并保存新版本</button></footer>
   </dialog>
-  <script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261029-portal-2"></script><script src="/static/doctor.js?v=20261029-gastritis-3"></script><script src="/static/gastritis.js?v=20261029-gastritis-3"></script>
+  <script src="/static/session.js?v=20261027-team-2"></script><script src="/static/doctor-shell.js?v=20261029-portal-2"></script><script src="/static/doctor.js?v=20261029-gastritis-4"></script><script src="/static/gastritis.js?v=20261029-gastritis-4"></script>
 </body></html>

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from patient_follow_up_system.auth import get_current_user, require_roles
 from patient_follow_up_system.database import get_db
-from patient_follow_up_system.gastritis_models import GastritisOptionConfirmation, GastritisRecord
+from patient_follow_up_system.gastritis_models import GastritisRecord
 from patient_follow_up_system.models import Patient, User, UserRole
 from patient_follow_up_system.permissions import require_patient
 from patient_follow_up_system.portal import get_portal_patient
@@ -141,33 +141,9 @@ class RecordRequest(BaseModel):
         return result
 
 
-class ConfirmationRequest(BaseModel):
-    schema_version: Literal[SCHEMA_VERSION]
-    note: str = Field(min_length=1, max_length=1000)
-
-    @field_validator("note")
-    @classmethod
-    def nonblank(cls, value):
-        if not value.strip():
-            raise ValueError("请填写负责医生确认说明")
-        return value.strip()
-
-
-def option_confirmation(db, doctor_id):
-    row = db.scalar(select(GastritisOptionConfirmation).where(GastritisOptionConfirmation.doctor_id == doctor_id, GastritisOptionConfirmation.schema_version == SCHEMA_VERSION).order_by(GastritisOptionConfirmation.id.desc()))
-    return {"schema_version": row.schema_version, "note": row.note, "confirmed_at": row.confirmed_at} if row else None
-
-
 @router.get("/gastritis/schema")
 def schema():
-    return {"version": SCHEMA_VERSION, "sections": SECTIONS, "symptoms": SYMPTOMS, "history_conditions": HISTORY, "grades": {"1": "偶有、程度较轻", "2": "时有、中等程度", "3": "经常、严重"}, "source": "杜宏波主任信息随访网站设计构思；选项口径须经负责医生确认"}
-
-
-@router.post("/doctor/gastritis-options/confirm")
-def confirm_options(request: ConfirmationRequest, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_roles(UserRole.DOCTOR))]):
-    db.add(GastritisOptionConfirmation(doctor_id=user.id, schema_version=SCHEMA_VERSION, note=request.note))
-    db.commit()
-    return option_confirmation(db, user.id)
+    return {"version": SCHEMA_VERSION, "sections": SECTIONS, "symptoms": SYMPTOMS, "history_conditions": HISTORY, "grades": {"1": "偶有、程度较轻", "2": "时有、中等程度", "3": "经常、严重"}, "source": "杜宏波主任信息随访网站设计构思"}
 
 
 def record_response(row):
@@ -183,7 +159,7 @@ def records(db, patient, response):
         basic.update({"sex": profile.sex, "date_of_birth": profile.date_of_birth.isoformat(), "phone": profile.phone or ""})
         allowed = {f["key"] for f in SECTIONS[0]["fields"]} - {"name", "sex", "date_of_birth", "phone"}
         basic.update({k: v for k, v in (profile.extra or {}).items() if k in allowed})
-    return {"records": [record_response(row) for row in rows], "initial_payload": {"basic": basic}, "option_confirmation": option_confirmation(db, patient.responsible_doctor_id)}
+    return {"records": [record_response(row) for row in rows], "initial_payload": {"basic": basic}}
 
 
 def append_record(db, patient, request, user=None):
@@ -192,8 +168,6 @@ def append_record(db, patient, request, user=None):
     # Acquire SQLite's write lock before selecting the next per-patient version.
     db.execute(update(Patient).where(Patient.id == patient.id).values(id=Patient.id))
     confirmed = bool(user and request.status == "confirmed")
-    if confirmed and not option_confirmation(db, patient.responsible_doctor_id):
-        raise HTTPException(409, "请负责医生先确认量表选项、分级与年龄/BMI计算口径")
     version = (db.scalar(select(func.max(GastritisRecord.version)).where(GastritisRecord.patient_id == patient.id)) or 0) + 1
     row = GastritisRecord(patient_id=patient.id, version=version, recorded_on=request.recorded_on, payload=request.payload, source="staff" if user else "patient", status="confirmed" if confirmed else "draft", created_by_id=user.id if user else None, confirmed_by_id=user.id if confirmed else None, confirmed_at=datetime.now(UTC) if confirmed else None)
     db.add(row)

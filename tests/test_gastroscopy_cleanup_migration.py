@@ -30,8 +30,7 @@ def test_cleanup_removes_only_top_level_section_from_all_history(tmp_path):
             db.execute("INSERT INTO gastritis_records(id,patient_id,version,recorded_on,payload,source,status,created_by_id,confirmed_by_id,confirmed_at,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)", (i, 1 if i < 3 else 2, i if i < 3 else 1, "2026-01-01", json.dumps(payload, ensure_ascii=False), "patient" if i == 1 else "staff", "confirmed" if i == 2 else "draft", None if i == 1 else 1, 1 if i == 2 else None, "2026-01-02 01:00:00" if i == 2 else None, "2026-01-01 01:00:00"))
         before_records = db.execute("SELECT * FROM gastritis_records ORDER BY id").fetchall()
         other_tables = {name: db.execute(f"SELECT * FROM {name}").fetchall() for name in ("users", "patients", "portal_access", "patient_documents", "gastritis_option_confirmations")}
-    migrate("upgrade", "head")
-    migrate("check")
+    migrate("upgrade", "d62b4c8e901a")
     with sqlite3.connect(database) as db:
         after_records = db.execute("SELECT * FROM gastritis_records ORDER BY id").fetchall()
         columns = [row[1] for row in db.execute("PRAGMA table_info(gastritis_records)")]
@@ -49,6 +48,6 @@ def test_cleanup_removes_only_top_level_section_from_all_history(tmp_path):
     assert "cannot be restored" in result.stderr
     with sqlite3.connect(database) as db:
         assert db.execute("SELECT * FROM gastritis_records ORDER BY id").fetchall() == after_records
-    migrate("upgrade", "head")
+    migrate("upgrade", "d62b4c8e901a")
     with sqlite3.connect(database) as db:
         assert db.execute("SELECT * FROM gastritis_records ORDER BY id").fetchall() == after_records
