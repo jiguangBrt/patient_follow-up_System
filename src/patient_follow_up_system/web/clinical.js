@@ -153,6 +153,6 @@ $("previewPage").onchange=()=>preview(Number($("previewPage").value));
 $("logout").onclick=()=>AppSession.logout(staffRole);
 async function init(){try{if(!token)return;const me=await api("/auth/me");if(me.role!==staffRole){AppSession.logout(staffRole);return;}DoctorShell.setUser(me.display_name);patients=await api("/patients");if(isStudent){$("uploadPatient").classList.remove("hidden");$("uploadPatient").required=true;$("uploadPatient").replaceChildren(new Option("请选择已获录入授权的患者",""),...patients.filter(p=>p.permissions.includes("edit")).map(p=>new Option(`${p.display_name}（${p.patient_code}）`,String(p.id))));$("studentUploadHelp").classList.remove("hidden");}await list();const params=new URLSearchParams(location.search);
   if(params.get("source")&&params.get("id")){const doc=await api("/clinical-documents/import",{method:"POST",body:JSON.stringify({source_kind:params.get("source"),source_id:Number(params.get("id"))})});await open(doc.id);await list();}
-  else if(params.get("id"))await open(Number(params.get("id")));if(!current)message("缓冲区候选不会自动绑定患者，请核对姓名及每项内容。");
+  else if(params.get("id"))await open(Number(params.get("id")));if(!current)message("缓冲区候选不会自动绑定患者，请核对姓名及每项内容。");window.DoctorTour?.resumeIfActive();
 }catch(e){message(e.message,true);}}
 init();

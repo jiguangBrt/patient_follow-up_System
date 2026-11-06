@@ -78,6 +78,14 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        if connection.dialect.name == "sqlite":
+            # Batch table rebuilds drop and recreate tables; keep FK checks off
+            # during migrations (the app re-enables them per connection).
+            # Run on the raw DBAPI connection before any transaction begins,
+            # since the pragma is a no-op inside a transaction.
+            connection.connection.driver_connection.execute(
+                "PRAGMA foreign_keys=OFF"
+            )
         context.configure(
             connection=connection, target_metadata=target_metadata
         )

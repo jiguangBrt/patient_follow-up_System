@@ -391,6 +391,29 @@ class AccountEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.current_timestamp(), nullable=False)
 
 
+class UserOnboardingState(Base):
+    __tablename__ = "user_onboarding_states"
+    __table_args__ = (
+        UniqueConstraint("user_id", "tour_key", name="uq_onboarding_user_tour"),
+        CheckConstraint(
+            "status IN ('pending', 'completed', 'skipped')",
+            name="ck_onboarding_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), index=True, nullable=False
+    )
+    tour_key: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.current_timestamp(),
+        nullable=False,
+    )
+
+
 class ClinicalDocument(Base):
     """OCR workspace; patient_id stays NULL until a doctor explicitly files it."""
     __tablename__ = "clinical_documents"
