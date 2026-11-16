@@ -30,7 +30,7 @@ def test_options_cleanup_drops_table_and_preserves_all_other_business_data(tmp_p
         assert not db.execute("SELECT name FROM sqlite_master WHERE name LIKE '%gastritis_option_confirmations%'").fetchall()
         assert before == {name: db.execute(f'SELECT * FROM "{name}"').fetchall() for name in tables}
         assert db.execute("PRAGMA foreign_key_check").fetchall() == []
-        assert db.execute("SELECT version_num FROM alembic_version").fetchone() == ("e73c5d9f012b",)
+        assert db.execute("SELECT version_num FROM alembic_version").fetchone() == ("9b2e7d31c5a4",)
     result = migrate("downgrade", "d62b4c8e901a")
     assert "cannot be restored" in result.stderr
     with sqlite3.connect(database) as db:

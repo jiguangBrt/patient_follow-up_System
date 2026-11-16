@@ -1,0 +1,16 @@
+.tour-overlay { position:fixed; inset:0; background:rgba(15,30,45,.55); z-index:900; }
+.tour-spotlight { position:fixed; pointer-events:none; z-index:901; border-radius:10px; box-shadow:0 0 0 3px rgba(112,217,194,.95), 0 0 26px rgba(81,196,177,.6); transition:top .25s, left .25s, width .25s, height .25s; }
+.tour-card { position:fixed; z-index:902; width:min(360px, calc(100vw - 24px)); background:#fff; border-radius:12px; box-shadow:0 18px 50px rgba(15,30,45,.35); padding:20px 22px 18px; color:#27384b; font-family:"Microsoft YaHei",system-ui,sans-serif; transition:top .25s, left .25s; }
+.tour-card.tour-centered { top:50% !important; left:50% !important; transform:translate(-50%,-50%); }
+.tour-card h2 { margin:0 26px 8px 0; font-size:16px; color:#17445b; }
+.tour-card p { margin:0 0 14px; font-size:12.5px; line-height:1.8; color:#5a6d7d; }
+.tour-close { position:absolute; top:10px; right:12px; min-height:0 !important; padding:4px 8px !important; background:transparent !important; color:#8ca5b8 !important; font-size:15px !important; font-weight:400 !important; }
+.tour-close:hover { color:#27384b !important; }
+.tour-progress { margin-bottom:14px; }
+.tour-progress .tour-progress-text { font-size:11px; color:#8594a4; letter-spacing:.5px; }
+.tour-progress .tour-progress-track { height:4px; margin-top:6px; border-radius:2px; background:#e9eff4; overflow:hidden; }
+.tour-progress .tour-progress-bar { height:100%; border-radius:2px; background:linear-gradient(90deg,#51c4b1,#70d9c2); transition:width .25s; }
+.tour-actions { display:flex; gap:10px; align-items:center; }
+.tour-actions button { min-height:36px; border-radius:7px; padding:8px 15px; font-size:12px; font-weight:500; }
+.tour-actions .tour-skip { margin-left:auto; background:transparent; color:#8594a4; font-weight:400; }
+.tour-actions .tour-skip:hover { color:#17445b; }

@@ -64,6 +64,7 @@ from patient_follow_up_system.permissions import (
 from patient_follow_up_system.team import router as team_router
 from patient_follow_up_system.portal import router as portal_router
 from patient_follow_up_system.gastritis import router as gastritis_router
+from patient_follow_up_system.onboarding import router as onboarding_router
 from patient_follow_up_system.web_pages import page_response
 
 load_dotenv()
@@ -81,6 +82,7 @@ app.include_router(patient_workspace_router)
 app.include_router(clinical_router)
 app.include_router(portal_router)
 app.include_router(gastritis_router)
+app.include_router(onboarding_router)
 
 
 @app.middleware("http")

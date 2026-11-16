@@ -29,6 +29,12 @@
   ];
   const root = document.getElementById("doctorSidebar");
   root.innerHTML = '<div class="doctor-brand"><span class="brand-mark">随</span><div>随访工作台<small>临床资料管理</small></div></div><nav aria-label="医生工作区"></nav><div class="sidebar-footer"><div class="sidebar-profile"><span class="profile-avatar">医</span><div><strong id="sidebarUser">医生</strong></div><button id="logout" title="退出登录" aria-label="退出登录">退出</button></div></div>';
+  if (!isAdmin && !isStudent) {
+    const replay = document.createElement("a");
+    replay.href = "#"; replay.textContent = "功能引导";
+    replay.addEventListener("click", event => { event.preventDefault(); window.DoctorTour?.start(); });
+    root.querySelector(".sidebar-footer").insertBefore(replay, root.querySelector(".sidebar-profile"));
+  }
   if (isAdmin) {
     root.querySelector("nav").setAttribute("aria-label", "管理员工作区");
     root.querySelector(".doctor-brand small").textContent = "平台管理";
